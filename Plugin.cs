@@ -30,7 +30,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override Guid Id => Guid.Parse("6b3d2c1a-9e4f-4b2a-8c7d-1f0a2b3c4d5e");
 
     public override string Description =>
-        "Messagerie temps reel entre utilisateurs du serveur : salon public, messages prives, amis, blocage et moderation.";
+        "Messagerie temps reel entre utilisateurs du serveur : salon public, messages prives, amis, blocage et moderation. "
+        + "Recommande : installer le plugin 'File Transformation' pour l'injection de l'interface dans le client web "
+        + "(sinon le fichier web/index.html doit etre accessible en ecriture par Jellyfin).";
 
     /// <summary>
     /// Chemin du dossier de donnees du plugin (base SQLite, etc.).

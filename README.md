@@ -48,6 +48,19 @@ Le plugin produit `bin/Release/net9.0/Jellyfin.Plugin.Chat.dll`.
 
 > Les versions des packages `Jellyfin.Controller` / `Jellyfin.Model` (10.10.3) doivent correspondre à ta version de serveur. Ajuste-les dans le `.csproj` si besoin.
 
+## ⚠️ Prérequis : plugin « File Transformation »
+
+L'interface de chat est un script injecté dans le client web Jellyfin. Depuis la 1.1.1.0, l'injection se fait **au moment où la page est servie**, via le plugin communautaire **[File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation)** — ce qui évite d'écrire sur le disque et **survit aux mises à jour de Jellyfin**.
+
+**Installe-le d'abord** :
+1. Tableau de bord → Plugins → Dépôts → **+** :
+   ```
+   https://www.iamparadox.dev/jellyfin/plugins/manifest.json
+   ```
+2. Catalogue → installe **File Transformation** → redémarre.
+
+> Sans File Transformation, le plugin retombe sur l'écriture directe de `web/index.html`, qui n'est possible que si ce fichier est accessible en écriture par le process Jellyfin (`sudo chown jellyfin /usr/share/jellyfin/web/index.html`), à refaire après chaque mise à jour du client web.
+
 ## Installation manuelle
 
 1. Crée un dossier dans le répertoire de plugins de Jellyfin :
