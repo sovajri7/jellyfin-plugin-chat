@@ -40,7 +40,14 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Cle API Klipy (klipy.com) pour la recherche de GIF integree.
     /// Chaque administrateur qui installe le plugin doit fournir sa propre cle.
-    /// Vide = recherche de GIF desactivee (le collage d'URL reste possible si EnableMedia).
+    /// Vide = recherche de GIF desactivee.
     /// </summary>
     public string KlipyApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Autoriser l'envoi d'images par URL externe libre. Par defaut false :
+    /// seuls les GIF issus de Klipy (hote klipy.*) sont acceptes, pour eviter
+    /// que le chat serve a poster des liens arbitraires (tracking d'IP, etc.).
+    /// </summary>
+    public bool AllowExternalImageUrls { get; set; }
 }

@@ -42,6 +42,17 @@
                     </label>
                 </div>
 
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="AllowExternalImageUrls" />
+                        <span>Autoriser les URLs d'images externes</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Decoche (recommande) pour n'autoriser que les GIF Klipy. Coche pour permettre
+                        l'envoi de n'importe quelle URL d'image (attention : peut servir a pister les IP des membres).
+                    </div>
+                </div>
+
                 <div class="inputContainer">
                     <label class="inputLabel inputLabelUnfocused" for="KlipyApiKey">Cle API Klipy (recherche de GIF)</label>
                     <input is="emby-input" type="text" id="KlipyApiKey" autocomplete="off" />
@@ -81,6 +92,7 @@
                     document.querySelector('#EnableDirectMessages').checked = config.EnableDirectMessages;
                     document.querySelector('#EnableMedia').checked = config.EnableMedia;
                     document.querySelector('#KlipyApiKey').value = config.KlipyApiKey || '';
+                    document.querySelector('#AllowExternalImageUrls').checked = config.AllowExternalImageUrls;
                     document.querySelector('#MaxMessageLength').value = config.MaxMessageLength;
                     document.querySelector('#MaxMessagesPerRoom').value = config.MaxMessagesPerRoom;
                     Dashboard.hideLoadingMsg();
@@ -98,6 +110,7 @@
                     config.EnableDirectMessages = document.querySelector('#EnableDirectMessages').checked;
                     config.EnableMedia = document.querySelector('#EnableMedia').checked;
                     config.KlipyApiKey = document.querySelector('#KlipyApiKey').value.trim();
+                    config.AllowExternalImageUrls = document.querySelector('#AllowExternalImageUrls').checked;
                     config.MaxMessageLength = parseInt(document.querySelector('#MaxMessageLength').value, 10) || 2000;
                     config.MaxMessagesPerRoom = parseInt(document.querySelector('#MaxMessagesPerRoom').value, 10) || 0;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {

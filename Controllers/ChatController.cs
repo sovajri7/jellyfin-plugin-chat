@@ -182,12 +182,21 @@ public class ChatController : ChatControllerBase
 
         var type = req.Type == "image" && Config.EnableMedia ? "image" : "text";
 
-        // Une image doit etre une URL http(s) (pas de data:, javascript:, etc.).
-        if (type == "image"
-            && !content.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
-            && !content.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        // Une image doit etre une URL http(s) valide (pas de data:, javascript:, etc.).
+        if (type == "image")
         {
-            return BadRequest(new { error = "URL d'image invalide (http/https requis)." });
+            if (!Uri.TryCreate(content, UriKind.Absolute, out var imgUri)
+                || (imgUri.Scheme != Uri.UriSchemeHttp && imgUri.Scheme != Uri.UriSchemeHttps))
+            {
+                return BadRequest(new { error = "URL d'image invalide (http/https requis)." });
+            }
+
+            // Par defaut : uniquement des GIF Klipy (pas d'URL externe libre).
+            if (!Config.AllowExternalImageUrls
+                && !imgUri.Host.Contains("klipy", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(403, new { error = "Seuls les GIF Klipy sont autorises." });
+            }
         }
 
         // Anti-flood.

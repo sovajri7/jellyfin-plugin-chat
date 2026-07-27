@@ -790,8 +790,8 @@
         var existing = document.getElementById('jfc-gifpicker');
         if (existing) { existing.remove(); return; }
         if (!state.gifEnabled) {
-            // Pas de cle Klipy configuree : repli sur le collage d'URL.
-            return doGifUrl();
+            showError('Recherche de GIF non configuree (cle Klipy manquante).');
+            return;
         }
         var pick = document.createElement('div');
         pick.id = 'jfc-gifpicker';
@@ -852,12 +852,6 @@
             var p = document.getElementById('jfc-gifpicker');
             if (p) { p.remove(); }
         }).catch(function (e) { showError(e.message); });
-    }
-
-    function doGifUrl() {
-        var url = window.prompt('Colle l\'URL d\'un GIF ou d\'une image :');
-        if (!url) { return; }
-        sendGif(url);
     }
 
     // Genere l'ensemble des emojis a partir des plages Unicode (construit une seule fois).
