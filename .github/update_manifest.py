@@ -6,7 +6,7 @@ import os
 from datetime import datetime, timezone
 
 GUID = "6b3d2c1a-9e4f-4b2a-8c7d-1f0a2b3c4d5e"
-TARGET_ABI = "10.10.0.0"
+TARGET_ABI = "10.11.0.0"
 MANIFEST = "manifest.json"
 
 

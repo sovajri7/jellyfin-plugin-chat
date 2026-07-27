@@ -58,11 +58,11 @@ public class AdminController : ChatControllerBase
         {
             userId = m.UserId.ToString("N"),
             name = _users.GetName(m.UserId),
-            m.Banned,
-            m.Muted,
-            m.ExpiresAt,
+            banned = m.Banned,
+            muted = m.Muted,
+            expiresAt = m.ExpiresAt,
             active = m.IsActive(now),
-            m.Reason
+            reason = m.Reason
         });
         return Ok(list);
     }

@@ -36,4 +36,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// Autorise l'envoi de GIF / images par URL.
     /// </summary>
     public bool EnableMedia { get; set; } = true;
+
+    /// <summary>
+    /// Cle API Klipy (klipy.com) pour la recherche de GIF integree.
+    /// Chaque administrateur qui installe le plugin doit fournir sa propre cle.
+    /// Vide = recherche de GIF desactivee (le collage d'URL reste possible si EnableMedia).
+    /// </summary>
+    public string KlipyApiKey { get; set; } = string.Empty;
 }

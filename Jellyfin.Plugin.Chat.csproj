@@ -13,9 +13,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Jellyfin 10.10.x SDK. Garde ces versions alignees avec ton serveur. -->
-    <PackageReference Include="Jellyfin.Controller" Version="10.10.3" />
-    <PackageReference Include="Jellyfin.Model" Version="10.10.3" />
+    <!-- Jellyfin 10.11.x SDK. Garde ces versions alignees avec ton serveur. -->
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.11" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.11" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
   </ItemGroup>
 

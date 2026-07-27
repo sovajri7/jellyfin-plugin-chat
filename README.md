@@ -64,6 +64,14 @@ Le plugin produit `bin/Release/net8.0/Jellyfin.Plugin.Chat.dll`.
 
 Tableau de bord → Plugins → **Chat en Direct**. On peut activer/désactiver le salon public, les DM, les médias, régler les limites, ou désactiver l'injection auto.
 
+### Recherche de GIF (Klipy)
+
+La recherche de GIF intégrée passe par [Klipy](https://klipy.com/developers). **Chaque administrateur qui installe le plugin doit créer sa propre clé API** (gratuit) et la coller dans la config du plugin. La clé reste côté serveur (proxy `/ChatPlugin/gif/search`) et n'est jamais exposée aux navigateurs. Sans clé, le bouton GIF retombe sur le collage d'une URL d'image.
+
+## Compatibilité
+
+Ciblé pour **Jellyfin 10.11.x** (compilé contre `Jellyfin.Controller` 10.11.11, `targetAbi` 10.11.0.0). Pour une autre version majeure, ajuste les versions de packages dans le `.csproj` et l'ABI dans `build.yaml` / `.github/update_manifest.py`.
+
 ## Points d'attention
 
 - **Injection `index.html`** : chaque mise à jour de Jellyfin réécrit le client web ; le plugin ré-injecte au démarrage, mais il faut redémarrer après une MAJ.

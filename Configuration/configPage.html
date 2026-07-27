@@ -39,8 +39,18 @@
                 <div class="checkboxContainer">
                     <label>
                         <input is="emby-checkbox" type="checkbox" id="EnableMedia" />
-                        <span>Autoriser l'envoi de GIF / images (URL)</span>
+                        <span>Autoriser l'envoi de GIF / images</span>
                     </label>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="KlipyApiKey">Cle API Klipy (recherche de GIF)</label>
+                    <input is="emby-input" type="text" id="KlipyApiKey" autocomplete="off" />
+                    <div class="fieldDescription">
+                        Pour activer la recherche de GIF integree, cree une cle sur
+                        <a href="https://klipy.com/developers" target="_blank" rel="noopener">klipy.com/developers</a>
+                        (gratuit) et colle-la ici. Sans cle, seul le collage d'URL d'image reste possible.
+                    </div>
                 </div>
 
                 <div class="inputContainer">
@@ -71,6 +81,7 @@
                     document.querySelector('#EnablePublicRoom').checked = config.EnablePublicRoom;
                     document.querySelector('#EnableDirectMessages').checked = config.EnableDirectMessages;
                     document.querySelector('#EnableMedia').checked = config.EnableMedia;
+                    document.querySelector('#KlipyApiKey').value = config.KlipyApiKey || '';
                     document.querySelector('#MaxMessageLength').value = config.MaxMessageLength;
                     document.querySelector('#MaxMessagesPerRoom').value = config.MaxMessagesPerRoom;
                     Dashboard.hideLoadingMsg();
@@ -87,6 +98,7 @@
                     config.EnablePublicRoom = document.querySelector('#EnablePublicRoom').checked;
                     config.EnableDirectMessages = document.querySelector('#EnableDirectMessages').checked;
                     config.EnableMedia = document.querySelector('#EnableMedia').checked;
+                    config.KlipyApiKey = document.querySelector('#KlipyApiKey').value.trim();
                     config.MaxMessageLength = parseInt(document.querySelector('#MaxMessageLength').value, 10) || 2000;
                     config.MaxMessagesPerRoom = parseInt(document.querySelector('#MaxMessagesPerRoom').value, 10) || 0;
                     ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {

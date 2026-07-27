@@ -93,7 +93,8 @@ public class ChatController : ChatControllerBase
             BlockedByMe = _db.ListRelations(me)
                 .Where(r => r.Kind == RelationKind.Blocked)
                 .Select(r => r.TargetId.ToString("N"))
-                .ToList()
+                .ToList(),
+            GifEnabled = Config.EnableMedia && !string.IsNullOrWhiteSpace(Config.KlipyApiKey)
         };
         return Ok(state);
     }

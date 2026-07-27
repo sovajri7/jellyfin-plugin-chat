@@ -59,4 +59,7 @@ public class SelfState
     public bool Muted { get; set; }
     public long MuteExpiresAt { get; set; }
     public List<string> BlockedByMe { get; set; } = new();
+
+    /// <summary>La recherche de GIF Klipy est-elle disponible (cle configuree) ?</summary>
+    public bool GifEnabled { get; set; }
 }

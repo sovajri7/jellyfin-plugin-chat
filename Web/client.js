@@ -23,7 +23,10 @@
         lastId: {},          // room -> dernier id charge
         seen: {},            // room -> Set d'ids affiches
         polling: null,
-        blockedByMe: []
+        blockedByMe: [],
+        gifEnabled: false,
+        _observer: null,
+        _pending: false
     };
 
     /* ------------------------------------------------------------------ */
@@ -126,15 +129,48 @@
     /* UI : lanceur + panneau                                             */
     /* ------------------------------------------------------------------ */
     function buildLauncher() {
-        if (document.getElementById('jfc-launcher')) {
-            return;
+        ensureHeaderButton();
+        // Le client Jellyfin est une SPA : il re-rend le header a chaque navigation.
+        // On observe le DOM pour re-injecter le bouton s'il disparait.
+        if (!state._observer) {
+            state._observer = new MutationObserver(scheduleEnsure);
+            state._observer.observe(document.body, { childList: true, subtree: true });
         }
+    }
+
+    function scheduleEnsure() {
+        if (state._pending) { return; }
+        state._pending = true;
+        setTimeout(function () { state._pending = false; ensureHeaderButton(); }, 300);
+    }
+
+    function findHeaderRight() {
+        return document.querySelector('.headerRight')
+            || document.querySelector('.skinHeader .headerRight')
+            || document.querySelector('[class*="headerRight"]')
+            || null;
+    }
+
+    function ensureHeaderButton() {
+        if (document.getElementById('jfc-launcher')) { return; }
+        var host = findHeaderRight();
         var btn = document.createElement('button');
         btn.id = 'jfc-launcher';
+        btn.type = 'button';
         btn.title = 'Chat en Direct';
-        btn.innerHTML = '💬';
-        btn.onclick = togglePanel;
-        document.body.appendChild(btn);
+        if (host) {
+            // Bouton natif Jellyfin : herite du theme (et de KefinTweaks).
+            btn.className = 'headerButton headerButtonRight paper-icon-button-light jfc-headerbtn';
+            btn.innerHTML = '<span class="material-icons" aria-hidden="true" style="font-size:1.6em">forum</span>'
+                + '<span class="jfc-unread" id="jfc-unread"></span>';
+            host.insertBefore(btn, host.firstChild);
+        } else {
+            // Repli : bouton flottant en bas a droite.
+            btn.className = 'jfc-float';
+            btn.innerHTML = '💬<span class="jfc-unread" id="jfc-unread"></span>';
+            document.body.appendChild(btn);
+        }
+        btn.addEventListener('click', togglePanel);
     }
 
     function togglePanel() {
@@ -179,7 +215,7 @@
         var adminBtn = panel.querySelector('#jfc-admin');
         if (adminBtn) { adminBtn.onclick = openAdmin; }
         panel.querySelector('#jfc-send').onclick = doSend;
-        panel.querySelector('#jfc-gif').onclick = doGif;
+        panel.querySelector('#jfc-gif').onclick = toggleGifPicker;
         panel.querySelector('#jfc-emoji').onclick = toggleEmoji;
         var input = panel.querySelector('#jfc-input');
         input.addEventListener('keydown', function (e) {
@@ -190,6 +226,7 @@
 
         // Init.
         checkAdminThenRender();
+        loadSelf();
         state.tabs = [{ room: 'public', target: null, name: 'Public' }];
         renderTabs();
         selectRoom('public', null);
@@ -389,9 +426,67 @@
         }).catch(function (e) { showError(e.message); input.value = text; });
     }
 
-    function doGif() {
-        var url = window.prompt('Colle l\'URL d\'un GIF ou d\'une image :');
-        if (!url) { return; }
+    function loadSelf() {
+        api('ChatPlugin/self').then(function (s) {
+            state.gifEnabled = !!(s && s.GifEnabled);
+        }).catch(function () {});
+    }
+
+    function toggleGifPicker() {
+        var existing = document.getElementById('jfc-gifpicker');
+        if (existing) { existing.remove(); return; }
+        if (!state.gifEnabled) {
+            // Pas de cle Klipy configuree : repli sur le collage d'URL.
+            return doGifUrl();
+        }
+        var pick = document.createElement('div');
+        pick.id = 'jfc-gifpicker';
+        pick.innerHTML =
+            '<div class="jfc-gif-top">' +
+                '<input id="jfc-gif-q" placeholder="Rechercher un GIF..." autocomplete="off" />' +
+                '<span class="jfc-gif-brand">via Klipy</span>' +
+            '</div>' +
+            '<div class="jfc-gif-grid" id="jfc-gif-grid"></div>';
+        document.getElementById('jfc-panel').appendChild(pick);
+        var q = pick.querySelector('#jfc-gif-q');
+        var t;
+        q.addEventListener('input', function () {
+            clearTimeout(t);
+            t = setTimeout(function () { searchGif(q.value); }, 350);
+        });
+        q.focus();
+        searchGif(''); // tendances au depart
+    }
+
+    function searchGif(query) {
+        var grid = document.getElementById('jfc-gif-grid');
+        if (!grid) { return; }
+        grid.innerHTML = '<div class="jfc-loading">Recherche...</div>';
+        api('ChatPlugin/gif/search?q=' + encodeURIComponent(query || '')).then(function (res) {
+            if (!document.getElementById('jfc-gif-grid')) { return; }
+            grid.innerHTML = '';
+            if (!res || !res.enabled) {
+                grid.innerHTML = '<div class="jfc-side-empty">Recherche de GIF non configuree (cle Klipy manquante).</div>';
+                return;
+            }
+            if (!res.items || !res.items.length) {
+                grid.innerHTML = '<div class="jfc-side-empty">Aucun resultat.</div>';
+                return;
+            }
+            res.items.forEach(function (g) {
+                var img = document.createElement('img');
+                img.src = g.preview || g.url;
+                img.className = 'jfc-gif-item';
+                img.loading = 'lazy';
+                img.onclick = function () { sendGif(g.url); };
+                grid.appendChild(img);
+            });
+        }).catch(function (e) {
+            if (grid) { grid.innerHTML = '<div class="jfc-err">' + esc(e.message) + '</div>'; }
+        });
+    }
+
+    function sendGif(url) {
         var payload = { content: url, type: 'image' };
         if (state.currentTarget) {
             payload.targetUserId = state.currentTarget;
@@ -400,7 +495,15 @@
         }
         api('ChatPlugin/messages', { method: 'POST', body: payload }).then(function (m) {
             if (m) { appendMessage(m, state.currentRoom); scrollBottom(); }
+            var p = document.getElementById('jfc-gifpicker');
+            if (p) { p.remove(); }
         }).catch(function (e) { showError(e.message); });
+    }
+
+    function doGifUrl() {
+        var url = window.prompt('Colle l\'URL d\'un GIF ou d\'une image :');
+        if (!url) { return; }
+        sendGif(url);
     }
 
     var EMOJIS = ['😀','😂','😍','😎','😅','😢','😡','👍','👎','❤️','🔥','🎉','🙏','💯','👀','🤡'];
