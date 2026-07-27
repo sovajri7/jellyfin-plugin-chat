@@ -127,13 +127,13 @@ public class ChatController : ChatControllerBase
         var mod = _db.GetModeration(me);
         if (mod is not null && mod.Banned && mod.IsActive(Now()))
         {
-            return Ok(new { messages = Array.Empty<MessageDto>(), deleted = Array.Empty<long>(), serverNow = Now() });
+            return Ok(new { messages = Array.Empty<MessageDto>(), deleted = Array.Empty<long>(), removed = Array.Empty<long>(), serverNow = Now() });
         }
 
         // DM avec quelqu'un qui m'a bloque (ou que j'ai bloque) : pas d'echange.
         if (otherUser is not null && _db.IsBlockedBetween(me, otherUser.Value))
         {
-            return Ok(new { messages = Array.Empty<MessageDto>(), deleted = Array.Empty<long>(), serverNow = Now() });
+            return Ok(new { messages = Array.Empty<MessageDto>(), deleted = Array.Empty<long>(), removed = Array.Empty<long>(), serverNow = Now() });
         }
 
         var msgs = history
@@ -143,11 +143,15 @@ public class ChatController : ChatControllerBase
         var deleted = history || delSince <= 0
             ? new List<long>()
             : _db.GetDeletedSince(resolvedRoom, delSince);
+        var removed = history || delSince <= 0
+            ? new List<long>()
+            : _db.GetRemovedSince(resolvedRoom, delSince);
 
         return Ok(new
         {
             messages = msgs.Select(m => ToDto(m, me)),
             deleted,
+            removed,
             serverNow = Now()
         });
     }

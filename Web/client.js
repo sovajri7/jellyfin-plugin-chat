@@ -478,12 +478,12 @@
                 if (docked) {
                     // En ancre, on ne redimensionne que la largeur.
                     var dw = state.win.mode === 'docked-right' ? (startX - ev.clientX) : (ev.clientX - startX);
-                    state.win.dockW = clamp(startW + dw, 260, window.innerWidth - 100);
+                    state.win.dockW = clamp(startW + dw, 200, window.innerWidth - 60);
                     p.style.width = state.win.dockW + 'px';
                     document.documentElement.style.setProperty('--jfc-dock-w', state.win.dockW + 'px');
                 } else {
-                    state.win.w = clamp(startW + (ev.clientX - startX), 300, window.innerWidth - 20);
-                    state.win.h = clamp(startH + (ev.clientY - startY), 300, window.innerHeight - 20);
+                    state.win.w = clamp(startW + (ev.clientX - startX), 220, window.innerWidth - 20);
+                    state.win.h = clamp(startH + (ev.clientY - startY), 180, window.innerHeight - 20);
                     p.style.width = state.win.w + 'px';
                     p.style.height = state.win.h + 'px';
                 }
@@ -604,10 +604,12 @@
             if (state.currentRoom !== room) { return; }
             var msgs = (res && res.messages) || [];
             var deleted = (res && res.deleted) || [];
+            var removed = (res && res.removed) || [];
             if (res && res.serverNow) { state._lastPollTs = res.serverNow; }
             var atBottom = isAtBottom();
             msgs.forEach(function (m) { appendMessage(m, room); });
             deleted.forEach(applyDeletion);
+            removed.forEach(applyRemoval);
             if (msgs.length && atBottom) { scrollBottom(); }
             if (target && msgs.length) { markRead(room, target); }
         }).catch(function () { /* silencieux pendant le polling */ });
@@ -625,6 +627,12 @@
         }
         var del = wrap.querySelector('.jfc-msg-del');
         if (del) { del.remove(); }
+    }
+
+    // Retrait definitif (purge / vider salon) : enleve le message du DOM.
+    function applyRemoval(id) {
+        var wrap = document.querySelector('#jfc-body .jfc-msg[data-id="' + id + '"]');
+        if (wrap) { wrap.remove(); }
     }
 
     function markRead(room, target) {

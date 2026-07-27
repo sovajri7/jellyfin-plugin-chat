@@ -90,7 +90,14 @@ CREATE TABLE IF NOT EXISTS read_state (
     room_id      TEXT NOT NULL,
     last_read_id INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id, room_id)
-);";
+);
+
+CREATE TABLE IF NOT EXISTS removals (
+    msg_id     INTEGER NOT NULL,
+    room_id    TEXT NOT NULL,
+    removed_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_removals_room ON removals(room_id, removed_at);";
             cmd.ExecuteNonQuery();
 
             // Migration pour les bases existantes : ajoute deleted_at si absent.
@@ -237,17 +244,41 @@ LIMIT $limit;";
         return res is null ? null : Guid.ParseExact(res, "N");
     }
 
-    /// <summary>Vide entierement un salon (action admin).</summary>
+    /// <summary>Vide entierement un salon (action admin). Journalise les retraits pour la propagation live.</summary>
     public int ClearRoom(string roomId)
     {
         lock (_writeLock)
         {
             using var conn = Open();
+            using var log = conn.CreateCommand();
+            log.CommandText = "INSERT INTO removals (msg_id, room_id, removed_at) SELECT id, room_id, $now FROM messages WHERE room_id = $room;";
+            log.Parameters.AddWithValue("$now", Now());
+            log.Parameters.AddWithValue("$room", roomId);
+            log.ExecuteNonQuery();
+
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "DELETE FROM messages WHERE room_id = $room;";
             cmd.Parameters.AddWithValue("$room", roomId);
             return cmd.ExecuteNonQuery();
         }
+    }
+
+    /// <summary>Ids retires (hard delete) d'un salon depuis un instant donne, pour le polling.</summary>
+    public List<long> GetRemovedSince(string roomId, long sinceMs)
+    {
+        var list = new List<long>();
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT msg_id FROM removals WHERE room_id = $room AND removed_at > $since;";
+        cmd.Parameters.AddWithValue("$room", roomId);
+        cmd.Parameters.AddWithValue("$since", sinceMs);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(r.GetInt64(0));
+        }
+
+        return list;
     }
 
     /// <summary>Elague les messages au-dela de la limite configuree.</summary>
@@ -274,15 +305,23 @@ WHERE room_id = $room
         }
     }
 
-    /// <summary>Supprime tous les messages d'un utilisateur (action admin).</summary>
+    /// <summary>Supprime tous les messages d'un utilisateur (action admin), avec propagation live.</summary>
     public int PurgeUserMessages(Guid userId)
     {
         lock (_writeLock)
         {
             using var conn = Open();
+            var sid = userId.ToString("N");
+
+            using var log = conn.CreateCommand();
+            log.CommandText = "INSERT INTO removals (msg_id, room_id, removed_at) SELECT id, room_id, $now FROM messages WHERE sender_id = $sid;";
+            log.Parameters.AddWithValue("$now", Now());
+            log.Parameters.AddWithValue("$sid", sid);
+            log.ExecuteNonQuery();
+
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "DELETE FROM messages WHERE sender_id = $sid;";
-            cmd.Parameters.AddWithValue("$sid", userId.ToString("N"));
+            cmd.Parameters.AddWithValue("$sid", sid);
             return cmd.ExecuteNonQuery();
         }
     }
