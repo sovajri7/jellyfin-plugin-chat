@@ -46,10 +46,11 @@
                 y: (typeof w.y === 'number') ? w.y : null,
                 w: w.w || 375,
                 h: w.h || 560,
-                dockW: w.dockW || 360
+                dockW: w.dockW || 360,
+                dockH: w.dockH || 320
             };
         } catch (e) {
-            return { mode: 'float', prevMode: 'float', x: null, y: null, w: 375, h: 560, dockW: 360 };
+            return { mode: 'float', prevMode: 'float', x: null, y: null, w: 375, h: 560, dockW: 360, dockH: 320 };
         }
     }
     function saveWin() {
@@ -300,6 +301,8 @@
                     (state.isAdmin ? '<button class="jfc-icon" id="jfc-admin" title="Moderation">⚙️</button>' : '') +
                     '<button class="jfc-icon" id="jfc-dockl" title="Ancrer a gauche">⇤</button>' +
                     '<button class="jfc-icon" id="jfc-dockr" title="Ancrer a droite">⇥</button>' +
+                    '<button class="jfc-icon" id="jfc-dockt" title="Ancrer en haut">⤒</button>' +
+                    '<button class="jfc-icon" id="jfc-dockb" title="Ancrer en bas">⤓</button>' +
                     '<button class="jfc-icon" id="jfc-min" title="Reduire">–</button>' +
                     '<button class="jfc-icon" id="jfc-max" title="Agrandir / restaurer">▢</button>' +
                     '<button class="jfc-icon" id="jfc-close" title="Fermer">✕</button>' +
@@ -314,7 +317,8 @@
                 '<button class="jfc-gif" id="jfc-gif" title="Envoyer un GIF / image">GIF</button>' +
                 '<button class="jfc-send" id="jfc-send" title="Envoyer">➤</button>' +
             '</div>' +
-            '<div class="jfc-resize" id="jfc-resize" title="Redimensionner"></div>';
+            '<div class="jfc-resize" id="jfc-resize" title="Redimensionner"></div>' +
+            '<div class="jfc-dockresize" id="jfc-dockresize" title="Redimensionner"></div>';
         document.body.appendChild(p);
 
         p.querySelector('#jfc-close').onclick = closePanel;
@@ -323,6 +327,8 @@
         if (adminBtn) { adminBtn.onclick = openAdmin; }
         p.querySelector('#jfc-dockl').onclick = function () { toggleDock('left'); };
         p.querySelector('#jfc-dockr').onclick = function () { toggleDock('right'); };
+        p.querySelector('#jfc-dockt').onclick = function () { toggleDock('top'); };
+        p.querySelector('#jfc-dockb').onclick = function () { toggleDock('bottom'); };
         p.querySelector('#jfc-min').onclick = minimizePanel;
         p.querySelector('#jfc-max').onclick = toggleMaximize;
         p.querySelector('#jfc-send').onclick = doSend;
@@ -340,6 +346,7 @@
 
         setupDrag(p.querySelector('#jfc-header'));
         setupResize(p.querySelector('#jfc-resize'));
+        setupDockResize(p.querySelector('#jfc-dockresize'));
 
         applyWindowState();
         p.classList.add('open');
@@ -360,22 +367,28 @@
         var p = panel();
         if (!p) { return; }
         var w = state.win;
-        p.classList.remove('docked', 'docked-left', 'docked-right', 'minimized', 'maximized');
+        p.classList.remove('docked', 'docked-left', 'docked-right', 'docked-top', 'docked-bottom', 'minimized', 'maximized');
         clearDockPush();
 
         if (w.mode === 'minimized') {
             p.classList.add('minimized');
             setFloatGeom(p);
-        } else if (w.mode === 'docked-left' || w.mode === 'docked-right') {
-            var side = w.mode === 'docked-left' ? 'left' : 'right';
+        } else if (w.mode.indexOf('docked-') === 0) {
+            var side = w.mode.split('-')[1]; // left | right | top | bottom
             p.classList.add('docked', 'docked-' + side);
-            p.style.top = '0';
-            p.style.bottom = '0';
-            p.style.height = '';
-            p.style.width = w.dockW + 'px';
-            p.style.left = side === 'left' ? '0' : '';
-            p.style.right = side === 'right' ? '0' : '';
-            document.documentElement.style.setProperty('--jfc-dock-w', w.dockW + 'px');
+            p.style.left = ''; p.style.right = ''; p.style.top = ''; p.style.bottom = '';
+            p.style.width = ''; p.style.height = '';
+            if (side === 'left' || side === 'right') {
+                p.style.top = '0'; p.style.bottom = '0';
+                p.style.width = w.dockW + 'px';
+                p.style[side] = '0';
+                document.documentElement.style.setProperty('--jfc-dock-w', w.dockW + 'px');
+            } else {
+                p.style.left = '0'; p.style.right = '0';
+                p.style.height = w.dockH + 'px';
+                p.style[side] = '0';
+                document.documentElement.style.setProperty('--jfc-dock-h', w.dockH + 'px');
+            }
             document.documentElement.classList.add('jfc-docked-' + side);
         } else if (w.mode === 'maximized') {
             p.classList.add('maximized');
@@ -404,7 +417,46 @@
     function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
     function clearDockPush() {
-        document.documentElement.classList.remove('jfc-docked-left', 'jfc-docked-right');
+        document.documentElement.classList.remove(
+            'jfc-docked-left', 'jfc-docked-right', 'jfc-docked-top', 'jfc-docked-bottom');
+    }
+
+    function setupDockResize(handle) {
+        handle.addEventListener('mousedown', function (e) {
+            if (state.win.mode.indexOf('docked-') !== 0) { return; }
+            e.preventDefault();
+            e.stopPropagation();
+            var p = panel();
+            var mode = state.win.mode;
+            var startX = e.clientX, startY = e.clientY;
+            var startW = state.win.dockW, startH = state.win.dockH;
+
+            function move(ev) {
+                if (mode === 'docked-left') {
+                    state.win.dockW = clamp(startW + (ev.clientX - startX), 200, window.innerWidth - 60);
+                } else if (mode === 'docked-right') {
+                    state.win.dockW = clamp(startW + (startX - ev.clientX), 200, window.innerWidth - 60);
+                } else if (mode === 'docked-top') {
+                    state.win.dockH = clamp(startH + (ev.clientY - startY), 150, window.innerHeight - 60);
+                } else if (mode === 'docked-bottom') {
+                    state.win.dockH = clamp(startH + (startY - ev.clientY), 150, window.innerHeight - 60);
+                }
+                if (mode === 'docked-left' || mode === 'docked-right') {
+                    p.style.width = state.win.dockW + 'px';
+                    document.documentElement.style.setProperty('--jfc-dock-w', state.win.dockW + 'px');
+                } else {
+                    p.style.height = state.win.dockH + 'px';
+                    document.documentElement.style.setProperty('--jfc-dock-h', state.win.dockH + 'px');
+                }
+            }
+            function up() {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+                saveWin();
+            }
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        });
     }
 
     function toggleDock(side) {
@@ -808,22 +860,36 @@
         sendGif(url);
     }
 
-    var EMOJIS = ['😀','😂','😍','😎','😅','😢','😡','👍','👎','❤️','🔥','🎉','🙏','💯','👀','🤡'];
+    // Genere l'ensemble des emojis a partir des plages Unicode (construit une seule fois).
+    function emojiGridHtml() {
+        if (state._emojiHtml) { return state._emojiHtml; }
+        var ranges = [
+            [0x1F600, 0x1F64F], [0x1F900, 0x1F9FF], [0x1F300, 0x1F5FF],
+            [0x1F680, 0x1F6FF], [0x1FA70, 0x1FAFF], [0x2600, 0x26FF],
+            [0x2700, 0x27BF], [0x2B00, 0x2BFF], [0x1F1E6, 0x1F1FF]
+        ];
+        var html = '';
+        ranges.forEach(function (r) {
+            for (var c = r[0]; c <= r[1]; c++) {
+                try { html += '<button type="button">' + String.fromCodePoint(c) + '</button>'; } catch (e) {}
+            }
+        });
+        state._emojiHtml = html;
+        return html;
+    }
+
     function toggleEmoji() {
         var existing = document.getElementById('jfc-emoji-pop');
         if (existing) { existing.remove(); return; }
         var pop = document.createElement('div');
         pop.id = 'jfc-emoji-pop';
-        EMOJIS.forEach(function (e) {
-            var b = document.createElement('button');
-            b.textContent = e;
-            b.onclick = function () {
+        pop.innerHTML = '<div class="jfc-emoji-grid">' + emojiGridHtml() + '</div>';
+        pop.querySelector('.jfc-emoji-grid').addEventListener('click', function (ev) {
+            if (ev.target.tagName === 'BUTTON') {
                 var input = document.getElementById('jfc-input');
-                input.value += e;
+                input.value += ev.target.textContent;
                 input.focus();
-                pop.remove();
-            };
-            pop.appendChild(b);
+            }
         });
         document.getElementById('jfc-panel').appendChild(pop);
     }

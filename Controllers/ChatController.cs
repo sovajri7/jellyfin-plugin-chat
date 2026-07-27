@@ -21,13 +21,15 @@ public class ChatController : ChatControllerBase
     private readonly ChatDatabase _db;
     private readonly UserResolver _users;
     private readonly PresenceTracker _presence;
+    private readonly RateLimiter _rate;
 
-    public ChatController(IAuthorizationContext auth, ChatDatabase db, UserResolver users, PresenceTracker presence)
+    public ChatController(IAuthorizationContext auth, ChatDatabase db, UserResolver users, PresenceTracker presence, RateLimiter rate)
         : base(auth)
     {
         _db = db;
         _users = users;
         _presence = presence;
+        _rate = rate;
     }
 
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -179,6 +181,20 @@ public class ChatController : ChatControllerBase
         }
 
         var type = req.Type == "image" && Config.EnableMedia ? "image" : "text";
+
+        // Une image doit etre une URL http(s) (pas de data:, javascript:, etc.).
+        if (type == "image"
+            && !content.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            && !content.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "URL d'image invalide (http/https requis)." });
+        }
+
+        // Anti-flood.
+        if (!_rate.Allow(me))
+        {
+            return StatusCode(429, new { error = "Trop de messages, ralentissez un peu." });
+        }
 
         // Sanctions.
         var mod = _db.GetModeration(me);

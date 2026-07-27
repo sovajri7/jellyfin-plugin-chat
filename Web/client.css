@@ -172,12 +172,12 @@
 .jfc-send:hover { background: var(--jfc-accent2); }
 
 #jfc-emoji-pop {
-    position: absolute; bottom: 60px; right: 60px; background: var(--jfc-bg2);
-    border: 1px solid var(--jfc-border); border-radius: 10px; padding: 6px;
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; z-index: 5;
+    position: absolute; bottom: 60px; left: 10px; right: 10px; background: var(--jfc-bg2);
+    border: 1px solid var(--jfc-border); border-radius: 10px; padding: 6px; z-index: 5;
 }
-#jfc-emoji-pop button { background: transparent; border: none; font-size: 18px; cursor: pointer; padding: 4px; border-radius: 6px; }
-#jfc-emoji-pop button:hover { background: var(--jfc-bg3); }
+.jfc-emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; max-height: 240px; overflow-y: auto; }
+.jfc-emoji-grid button { background: transparent; border: none; font-size: 18px; cursor: pointer; padding: 3px; border-radius: 6px; line-height: 1; }
+.jfc-emoji-grid button:hover { background: var(--jfc-bg3); }
 
 /* Selecteur de GIF (Klipy) */
 #jfc-gifpicker {
@@ -240,9 +240,11 @@
 .jfc-toast.show { opacity: 1; transform: none; }
 
 /* ---- Fenetre : controles, drag, resize, dock, minimize ---- */
-.jfc-header { cursor: move; user-select: none; }
-.jfc-winctrls { margin-left: auto; display: flex; align-items: center; gap: 0; }
-.jfc-header .jfc-winctrls .jfc-icon { margin-left: 0; padding: 4px 4px; position: relative; }
+.jfc-header { cursor: move; user-select: none; flex-wrap: nowrap; overflow: hidden; }
+.jfc-header .jfc-title { flex-shrink: 0; }
+.jfc-header .jfc-online { flex-shrink: 1; overflow: hidden; white-space: nowrap; }
+.jfc-winctrls { margin-left: auto; display: flex; align-items: center; gap: 0; flex-shrink: 0; }
+.jfc-header .jfc-winctrls .jfc-icon { margin-left: 0; padding: 3px 3px; font-size: 13px; position: relative; }
 
 .jfc-btnbadge {
     background: var(--jfc-danger); color: #fff; font-size: 10px; line-height: 1;
@@ -267,29 +269,60 @@
 #jfc-panel.minimized .jfc-side,
 #jfc-panel.minimized .jfc-resize { display: none; }
 
-/* Ancre sur un cote : pleine hauteur, coins droits. */
-#jfc-panel.docked { border-radius: 0; height: 100vh !important; max-height: 100vh; }
+/* Ancre sur un cote : coins droits, pleine dimension. */
+#jfc-panel.docked { border-radius: 0; max-height: 100vh; max-width: 100vw; }
+#jfc-panel.docked-left, #jfc-panel.docked-right { height: 100vh !important; }
 #jfc-panel.docked-left { border-right: 1px solid var(--jfc-border); border-left: none; }
 #jfc-panel.docked-right { border-left: 1px solid var(--jfc-border); border-right: none; }
-#jfc-panel.docked .jfc-resize { cursor: ew-resize; }
+#jfc-panel.docked-top { border-bottom: 1px solid var(--jfc-border); }
+#jfc-panel.docked-bottom { border-top: 1px solid var(--jfc-border); }
+#jfc-panel.docked .jfc-resize { display: none; }
+
+/* Poignee de redimensionnement de l'ancrage (bord interieur). */
+.jfc-dockresize { display: none; position: absolute; z-index: 8; }
+.jfc-dockresize:hover { background: var(--jfc-accent); opacity: .4; }
+#jfc-panel.docked-left .jfc-dockresize { display: block; right: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+#jfc-panel.docked-right .jfc-dockresize { display: block; left: 0; top: 0; bottom: 0; width: 6px; cursor: ew-resize; }
+#jfc-panel.docked-top .jfc-dockresize { display: block; bottom: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
+#jfc-panel.docked-bottom .jfc-dockresize { display: block; top: 0; left: 0; right: 0; height: 6px; cursor: ns-resize; }
 
 /* Poussee de la page quand la fenetre est ancree. */
-:root { --jfc-dock-w: 360px; }
+:root { --jfc-dock-w: 360px; --jfc-dock-h: 320px; }
+/* Poussee horizontale (ancrage gauche/droite). */
 html.jfc-docked-right body { padding-right: var(--jfc-dock-w) !important; transition: padding .18s ease; }
 html.jfc-docked-left body { padding-left: var(--jfc-dock-w) !important; transition: padding .18s ease; }
 html.jfc-docked-right .skinHeader { right: var(--jfc-dock-w) !important; left: 0 !important; width: auto !important; }
 html.jfc-docked-left .skinHeader { left: var(--jfc-dock-w) !important; right: 0 !important; width: auto !important; }
+/* Poussee verticale (ancrage haut/bas). */
+html.jfc-docked-top body { padding-top: var(--jfc-dock-h) !important; transition: padding .18s ease; }
+html.jfc-docked-bottom body { padding-bottom: var(--jfc-dock-h) !important; transition: padding .18s ease; }
+html.jfc-docked-top .skinHeader { top: var(--jfc-dock-h) !important; }
 
-/* Decale aussi le lecteur video (plein ecran) pour qu'il ne soit pas cache. */
+/* Decale le lecteur video (plein ecran) ET ses commandes du bas pour ne rien cacher. */
 html.jfc-docked-right #videoOsdPage,
 html.jfc-docked-right .videoPlayerContainer,
-html.jfc-docked-right video.htmlvideoplayer {
+html.jfc-docked-right video.htmlvideoplayer,
+html.jfc-docked-right .videoOsdBottom {
     right: var(--jfc-dock-w) !important; left: 0 !important;
     width: calc(100vw - var(--jfc-dock-w)) !important;
 }
 html.jfc-docked-left #videoOsdPage,
 html.jfc-docked-left .videoPlayerContainer,
-html.jfc-docked-left video.htmlvideoplayer {
+html.jfc-docked-left video.htmlvideoplayer,
+html.jfc-docked-left .videoOsdBottom {
     left: var(--jfc-dock-w) !important; right: 0 !important;
     width: calc(100vw - var(--jfc-dock-w)) !important;
 }
+html.jfc-docked-top #videoOsdPage,
+html.jfc-docked-top .videoPlayerContainer,
+html.jfc-docked-top video.htmlvideoplayer {
+    top: var(--jfc-dock-h) !important; bottom: 0 !important;
+    height: calc(100vh - var(--jfc-dock-h)) !important;
+}
+html.jfc-docked-bottom #videoOsdPage,
+html.jfc-docked-bottom .videoPlayerContainer,
+html.jfc-docked-bottom video.htmlvideoplayer {
+    top: 0 !important; bottom: var(--jfc-dock-h) !important;
+    height: calc(100vh - var(--jfc-dock-h)) !important;
+}
+html.jfc-docked-bottom .videoOsdBottom { bottom: var(--jfc-dock-h) !important; }
