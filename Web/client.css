@@ -271,7 +271,10 @@
 
 /* Ancre sur un cote : coins droits, pleine dimension. */
 #jfc-panel.docked { border-radius: 0; max-height: 100vh; max-width: 100vw; }
-#jfc-panel.docked-left, #jfc-panel.docked-right { height: 100vh !important; }
+/* Gauche/droite : pleine hauteur (largeur redimensionnable en inline). */
+#jfc-panel.docked-left, #jfc-panel.docked-right { top: 0 !important; bottom: 0 !important; height: auto !important; }
+/* Haut/bas : pleine largeur (hauteur redimensionnable en inline). */
+#jfc-panel.docked-top, #jfc-panel.docked-bottom { left: 0 !important; right: 0 !important; width: auto !important; }
 #jfc-panel.docked-left { border-right: 1px solid var(--jfc-border); border-left: none; }
 #jfc-panel.docked-right { border-left: 1px solid var(--jfc-border); border-right: none; }
 #jfc-panel.docked-top { border-bottom: 1px solid var(--jfc-border); }

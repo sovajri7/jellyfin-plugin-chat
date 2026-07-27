@@ -339,6 +339,12 @@
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
         });
 
+        // Empeche les touches tapees dans le chat de declencher les raccourcis Jellyfin
+        // (espace = pause, f = plein ecran, fleches, etc.).
+        ['keydown', 'keyup', 'keypress'].forEach(function (evt) {
+            p.addEventListener(evt, function (e) { e.stopPropagation(); });
+        });
+
         // Clic sur le bandeau reduit : re-ouvre.
         p.querySelector('#jfc-header').addEventListener('dblclick', function () {
             if (state.win.mode === 'minimized') { openPanel(); }
@@ -376,15 +382,16 @@
         } else if (w.mode.indexOf('docked-') === 0) {
             var side = w.mode.split('-')[1]; // left | right | top | bottom
             p.classList.add('docked', 'docked-' + side);
-            p.style.left = ''; p.style.right = ''; p.style.top = ''; p.style.bottom = '';
+            // Reset des offsets (auto pour ne pas heriter du top:60px/right:16px de base).
+            p.style.left = p.style.right = p.style.top = p.style.bottom = 'auto';
             p.style.width = ''; p.style.height = '';
             if (side === 'left' || side === 'right') {
-                p.style.top = '0'; p.style.bottom = '0';
+                // Largeur redimensionnable ; hauteur pleine geree par le CSS.
                 p.style.width = w.dockW + 'px';
                 p.style[side] = '0';
                 document.documentElement.style.setProperty('--jfc-dock-w', w.dockW + 'px');
             } else {
-                p.style.left = '0'; p.style.right = '0';
+                // Hauteur redimensionnable ; largeur pleine geree par le CSS.
                 p.style.height = w.dockH + 'px';
                 p.style[side] = '0';
                 document.documentElement.style.setProperty('--jfc-dock-h', w.dockH + 'px');
