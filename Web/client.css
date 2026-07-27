@@ -316,7 +316,8 @@ html.jfc-docked-left .videoOsdBottom {
     left: var(--jfc-dock-w) !important; right: 0 !important;
     width: calc(100vw - var(--jfc-dock-w)) !important;
 }
-html.jfc-docked-top #videoOsdPage,
+/* Dock haut : on retrecit uniquement la video (pas tout l'OSD, sinon les commandes
+   du bas se retrouvent decalees). Le bandeau du haut passe simplement sous le chat. */
 html.jfc-docked-top .videoPlayerContainer,
 html.jfc-docked-top video.htmlvideoplayer {
     top: var(--jfc-dock-h) !important; bottom: 0 !important;
