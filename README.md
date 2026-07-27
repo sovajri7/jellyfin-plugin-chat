@@ -37,14 +37,14 @@ Web/client.js, client.css     Interface du chat
 
 ## Compilation
 
-Prérequis : **.NET 8 SDK**.
+Prérequis : **.NET 9 SDK** (Jellyfin 10.11 tourne sur .NET 9).
 
 ```bash
 cd Jellyfin.Plugin.Chat
 dotnet build -c Release
 ```
 
-Le plugin produit `bin/Release/net8.0/Jellyfin.Plugin.Chat.dll`.
+Le plugin produit `bin/Release/net9.0/Jellyfin.Plugin.Chat.dll`.
 
 > Les versions des packages `Jellyfin.Controller` / `Jellyfin.Model` (10.10.3) doivent correspondre à ta version de serveur. Ajuste-les dans le `.csproj` si besoin.
 
