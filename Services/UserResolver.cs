@@ -27,8 +27,14 @@ public sealed class UserResolver
     public bool IsAdmin(Guid id)
     {
         var u = _userManager.GetUserById(id);
-        return u is not null && u.HasPermission(PermissionKind.IsAdministrator);
+        return u is not null && IsAdministrator(u);
     }
+
+    /// <summary>
+    /// En 10.11, l'entite User n'expose plus HasPermission() : on teste la collection Permissions.
+    /// </summary>
+    private static bool IsAdministrator(User user) =>
+        user.Permissions.Any(p => p.Kind == PermissionKind.IsAdministrator && p.Value);
 
     /// <summary>
     /// URL relative de l'avatar (a prefixer cote client par l'adresse du serveur),
@@ -53,6 +59,6 @@ public sealed class UserResolver
         Id = user.Id.ToString("N"),
         Name = user.Username,
         AvatarUrl = GetAvatarUrl(user),
-        IsAdmin = user.HasPermission(PermissionKind.IsAdministrator)
+        IsAdmin = IsAdministrator(user)
     };
 }
