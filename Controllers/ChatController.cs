@@ -13,7 +13,7 @@ namespace Jellyfin.Plugin.Chat.Controllers;
 
 /// <summary>Endpoints principaux du chat : annuaire, messages, envoi, etat perso.</summary>
 [ApiController]
-[Authorize(Policy = "DefaultAuthorization")]
+[Authorize]
 [Route("ChatPlugin")]
 [Produces("application/json")]
 public class ChatController : ChatControllerBase

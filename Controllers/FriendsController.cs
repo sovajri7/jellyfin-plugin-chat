@@ -13,7 +13,7 @@ namespace Jellyfin.Plugin.Chat.Controllers;
 
 /// <summary>Gestion des amis et des blocages.</summary>
 [ApiController]
-[Authorize(Policy = "DefaultAuthorization")]
+[Authorize]
 [Route("ChatPlugin/relations")]
 [Produces("application/json")]
 public class FriendsController : ChatControllerBase

@@ -31,29 +31,19 @@ public sealed class WebInjectionService : IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var enabled = Plugin.Instance?.Configuration.InjectClientScript ?? true;
+        var ftPresent = FileTransformationAssembly() is not null;
 
-        if (FileTransformationAssembly() is not null)
+        // 1) File Transformation : couvre les setups ou Jellyfin sert lui-meme le client web.
+        if (ftPresent && enabled)
         {
-            if (enabled)
-            {
-                _logger.LogInformation("[Chat] File Transformation detecte : enregistrement de l'injection au service de la page.");
-                ScheduleFileTransformationRegistration();
-            }
-
-            // Avec File Transformation on ne touche jamais au disque.
-            return Task.CompletedTask;
+            _logger.LogInformation("[Chat] File Transformation detecte : enregistrement de l'injection au service de la page.");
+            ScheduleFileTransformationRegistration();
         }
 
-        // Repli : injection directe sur disque.
-        if (enabled)
-        {
-            _logger.LogInformation("[Chat] File Transformation absent : injection directe dans index.html (droits d'ecriture requis).");
-            DiskInject(true);
-        }
-        else
-        {
-            DiskInject(false);
-        }
+        // 2) Injection directe dans index.html : couvre les setups ou un reverse proxy sert
+        //    le dossier web en statique (File Transformation ne voit alors jamais la requete).
+        //    Idempotent (marqueur) : n'ajoute rien si le script est deja present.
+        DiskInject(enabled, ftPresent);
 
         return Task.CompletedTask;
     }
@@ -90,9 +80,7 @@ public sealed class WebInjectionService : IHostedService
                 await Task.Delay(2500).ConfigureAwait(false);
             }
 
-            _logger.LogWarning("[Chat] Echec de l'enregistrement aupres de File Transformation apres plusieurs tentatives. "
-                + "Repli sur l'injection disque.");
-            DiskInject(true);
+            _logger.LogWarning("[Chat] Echec de l'enregistrement aupres de File Transformation apres plusieurs tentatives.");
         });
     }
 
@@ -131,7 +119,7 @@ public sealed class WebInjectionService : IHostedService
     // ------------------------------------------------------------------
     // Strategie 2 : injection directe dans index.html
     // ------------------------------------------------------------------
-    private void DiskInject(bool enable)
+    private void DiskInject(bool enable, bool ftPresent)
     {
         try
         {
@@ -166,11 +154,22 @@ public sealed class WebInjectionService : IHostedService
         catch (UnauthorizedAccessException)
         {
             var indexPath = Path.Combine(_paths.WebPath, "index.html");
-            _logger.LogError(
-                "[Chat] Ecriture refusee sur {Path}. Le process Jellyfin n'a pas les droits d'ecriture sur le client web. "
-                + "Solution recommandee : installer le plugin 'File Transformation'. "
-                + "Alternative : 'sudo chown jellyfin {Path}' puis redemarrer Jellyfin.",
-                indexPath, indexPath);
+            if (ftPresent)
+            {
+                // File Transformation gerera l'injection si Jellyfin sert lui-meme le client web.
+                _logger.LogInformation(
+                    "[Chat] index.html en lecture seule : File Transformation prend le relais si Jellyfin sert le client web. "
+                    + "Si un reverse proxy sert le dossier web en statique, rends index.html accessible en ecriture "
+                    + "('sudo chown jellyfin {Path}') pour que le plugin l'injecte lui-meme.",
+                    indexPath);
+            }
+            else
+            {
+                _logger.LogError(
+                    "[Chat] Ecriture refusee sur {Path}. Le process Jellyfin n'a pas les droits d'ecriture sur le client web. "
+                    + "Solution : installer le plugin 'File Transformation', ou 'sudo chown jellyfin {Path}' puis redemarrer.",
+                    indexPath, indexPath);
+            }
         }
         catch (Exception ex)
         {

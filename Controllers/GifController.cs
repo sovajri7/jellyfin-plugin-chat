@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.Chat.Controllers;
 /// La cle API reste cote serveur : elle n'est jamais exposee au navigateur.
 /// </summary>
 [ApiController]
-[Authorize(Policy = "DefaultAuthorization")]
+[Authorize]
 [Route("ChatPlugin/gif")]
 [Produces("application/json")]
 public class GifController : ChatControllerBase
