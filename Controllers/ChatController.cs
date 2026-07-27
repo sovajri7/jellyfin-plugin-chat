@@ -20,12 +20,14 @@ public class ChatController : ChatControllerBase
 {
     private readonly ChatDatabase _db;
     private readonly UserResolver _users;
+    private readonly PresenceTracker _presence;
 
-    public ChatController(IAuthorizationContext auth, ChatDatabase db, UserResolver users)
+    public ChatController(IAuthorizationContext auth, ChatDatabase db, UserResolver users, PresenceTracker presence)
         : base(auth)
     {
         _db = db;
         _users = users;
+        _presence = presence;
     }
 
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -99,15 +101,21 @@ public class ChatController : ChatControllerBase
         return Ok(state);
     }
 
-    /// <summary>Messages d'un salon (polling avec ?after=dernierId).</summary>
+    /// <summary>
+    /// Messages d'un salon. Polling : ?after=dernierId (nouveaux messages)
+    /// et ?delSince=epochMs (ids supprimes depuis, pour propager les suppressions en direct).
+    /// Renvoie toujours { messages: [...], deleted: [ids] }.
+    /// </summary>
     [HttpGet("messages")]
-    public async Task<ActionResult<IEnumerable<MessageDto>>> GetMessages(
+    public async Task<ActionResult> GetMessages(
         [FromQuery] string roomId = "public",
         [FromQuery] string? targetUserId = null,
         [FromQuery] long after = 0,
+        [FromQuery] long delSince = 0,
         [FromQuery] bool history = false)
     {
         var me = await GetCurrentUserIdAsync().ConfigureAwait(false);
+        _presence.Touch(me);
 
         var resolvedRoom = ResolveRoom(roomId, targetUserId, me, out var otherUser, out var error);
         if (error is not null)
@@ -119,20 +127,29 @@ public class ChatController : ChatControllerBase
         var mod = _db.GetModeration(me);
         if (mod is not null && mod.Banned && mod.IsActive(Now()))
         {
-            return Ok(Array.Empty<MessageDto>());
+            return Ok(new { messages = Array.Empty<MessageDto>(), deleted = Array.Empty<long>(), serverNow = Now() });
         }
 
         // DM avec quelqu'un qui m'a bloque (ou que j'ai bloque) : pas d'echange.
         if (otherUser is not null && _db.IsBlockedBetween(me, otherUser.Value))
         {
-            return Ok(Array.Empty<MessageDto>());
+            return Ok(new { messages = Array.Empty<MessageDto>(), deleted = Array.Empty<long>(), serverNow = Now() });
         }
 
         var msgs = history
             ? _db.GetHistory(resolvedRoom, 100)
             : _db.GetMessages(resolvedRoom, after, 200);
 
-        return Ok(msgs.Select(m => ToDto(m, me)));
+        var deleted = history || delSince <= 0
+            ? new List<long>()
+            : _db.GetDeletedSince(resolvedRoom, delSince);
+
+        return Ok(new
+        {
+            messages = msgs.Select(m => ToDto(m, me)),
+            deleted,
+            serverNow = Now()
+        });
     }
 
     /// <summary>Envoi d'un message.</summary>
@@ -229,6 +246,68 @@ public class ChatController : ChatControllerBase
         }
 
         _db.SoftDeleteMessage(id);
+        return NoContent();
+    }
+
+    /// <summary>Notifications : demandes d'ami en attente + conversations avec non-lus.</summary>
+    [HttpGet("notifications")]
+    public async Task<ActionResult> GetNotifications()
+    {
+        var me = await GetCurrentUserIdAsync().ConfigureAwait(false);
+        _presence.Touch(me);
+        var friendRequests = _db.ListInbound(me).Count(r => r.Kind == RelationKind.PendingRequest);
+
+        var conversations = new List<object>();
+        var totalUnread = 0;
+        foreach (var (room, other, unread, lastId, lastTs) in _db.GetDmConversations(me))
+        {
+            // On masque les conversations avec un utilisateur bloque.
+            if (_db.IsBlockedBetween(me, other))
+            {
+                continue;
+            }
+
+            var user = _users.GetUser(other);
+            if (user is null)
+            {
+                continue;
+            }
+
+            totalUnread += unread;
+            conversations.Add(new
+            {
+                userId = other.ToString("N"),
+                name = user.Username,
+                avatarUrl = _users.GetAvatarUrl(user),
+                roomId = room,
+                unread,
+                lastTs
+            });
+        }
+
+        return Ok(new
+        {
+            friendRequests,
+            totalUnread,
+            badge = friendRequests + totalUnread,
+            online = _presence.OnlineCount(),
+            members = _users.AllUsers().Count(),
+            conversations
+        });
+    }
+
+    /// <summary>Marque une conversation comme lue.</summary>
+    [HttpPost("read")]
+    public async Task<ActionResult> MarkRead([FromQuery] string? roomId = null, [FromQuery] string? targetUserId = null)
+    {
+        var me = await GetCurrentUserIdAsync().ConfigureAwait(false);
+        var resolved = ResolveRoom(roomId, targetUserId, me, out _, out var error);
+        if (error is not null)
+        {
+            return BadRequest(new { error });
+        }
+
+        _db.MarkRead(me, resolved);
         return NoContent();
     }
 

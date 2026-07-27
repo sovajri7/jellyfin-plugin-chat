@@ -234,3 +234,44 @@
     opacity: 0; transform: translateY(10px); transition: all .2s ease; max-width: 300px;
 }
 .jfc-toast.show { opacity: 1; transform: none; }
+
+/* ---- Fenetre : controles, drag, resize, dock, minimize ---- */
+.jfc-header { cursor: move; user-select: none; }
+.jfc-winctrls { margin-left: auto; display: flex; align-items: center; gap: 0; }
+.jfc-header .jfc-winctrls .jfc-icon { margin-left: 0; padding: 4px 4px; position: relative; }
+
+.jfc-btnbadge {
+    background: var(--jfc-danger); color: #fff; font-size: 10px; line-height: 1;
+    min-width: 16px; height: 16px; border-radius: 8px; padding: 0 4px;
+    display: inline-flex; align-items: center; justify-content: center; margin-left: 6px;
+}
+#jfc-people { position: relative; }
+#jfc-people .jfc-btnbadge { position: absolute; top: -2px; right: -2px; margin: 0; }
+.jfc-conv { cursor: pointer; }
+
+.jfc-resize { position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: nwse-resize; z-index: 7; }
+.jfc-resize::after {
+    content: ''; position: absolute; right: 3px; bottom: 3px; width: 8px; height: 8px;
+    border-right: 2px solid var(--jfc-muted); border-bottom: 2px solid var(--jfc-muted); opacity: .6;
+}
+
+/* Reduit : ne garde que le bandeau. */
+#jfc-panel.minimized { height: auto !important; }
+#jfc-panel.minimized .jfc-tabs,
+#jfc-panel.minimized .jfc-body,
+#jfc-panel.minimized .jfc-inputbar,
+#jfc-panel.minimized .jfc-side,
+#jfc-panel.minimized .jfc-resize { display: none; }
+
+/* Ancre sur un cote : pleine hauteur, coins droits. */
+#jfc-panel.docked { border-radius: 0; height: 100vh !important; max-height: 100vh; }
+#jfc-panel.docked-left { border-right: 1px solid var(--jfc-border); border-left: none; }
+#jfc-panel.docked-right { border-left: 1px solid var(--jfc-border); border-right: none; }
+#jfc-panel.docked .jfc-resize { cursor: ew-resize; }
+
+/* Poussee de la page quand la fenetre est ancree. */
+:root { --jfc-dock-w: 360px; }
+html.jfc-docked-right body { padding-right: var(--jfc-dock-w) !important; transition: padding .18s ease; }
+html.jfc-docked-left body { padding-left: var(--jfc-dock-w) !important; transition: padding .18s ease; }
+html.jfc-docked-right .skinHeader { right: var(--jfc-dock-w) !important; left: 0 !important; width: auto !important; }
+html.jfc-docked-left .skinHeader { left: var(--jfc-dock-w) !important; right: 0 !important; width: auto !important; }

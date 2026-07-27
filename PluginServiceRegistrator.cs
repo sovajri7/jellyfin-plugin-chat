@@ -15,6 +15,7 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
     {
         serviceCollection.AddSingleton<ChatDatabase>();
         serviceCollection.AddSingleton<UserResolver>();
+        serviceCollection.AddSingleton<PresenceTracker>();
 
         // Service d'amorcage : injecte le script du chat dans index.html au demarrage.
         serviceCollection.AddHostedService<WebInjectionService>();

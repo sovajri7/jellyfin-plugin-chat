@@ -49,6 +49,19 @@ public class AdminController : ChatControllerBase
         return ok ? NoContent() : NotFound();
     }
 
+    /// <summary>Supprimer tous les messages d'un utilisateur (toutes conversations).</summary>
+    [HttpPost("purge/{userId}")]
+    public ActionResult PurgeUser(string userId)
+    {
+        if (!TryParse(userId, out var user))
+        {
+            return BadRequest(new { error = "Utilisateur invalide." });
+        }
+
+        var count = _db.PurgeUserMessages(user);
+        return Ok(new { purged = count });
+    }
+
     /// <summary>Etat de moderation de tous les utilisateurs sanctionnes.</summary>
     [HttpGet("moderation")]
     public ActionResult GetModeration()

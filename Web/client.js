@@ -26,8 +26,35 @@
         blockedByMe: [],
         gifEnabled: false,
         _observer: null,
-        _pending: false
+        _pending: false,
+        notif: { badge: 0, friendRequests: 0, conversations: [] },
+        notifPolling: null,
+        win: null // etat de fenetre (charge depuis localStorage)
     };
+
+    /* ------------------------------------------------------------------ */
+    /* Etat de la fenetre (position/taille/mode), persiste.               */
+    /* ------------------------------------------------------------------ */
+    var WIN_KEY = 'jfc-win';
+    function loadWin() {
+        try {
+            var w = JSON.parse(localStorage.getItem(WIN_KEY) || '{}');
+            return {
+                mode: w.mode || 'float',       // float | docked-left | docked-right | minimized
+                prevMode: w.prevMode || 'float',
+                x: (typeof w.x === 'number') ? w.x : null,
+                y: (typeof w.y === 'number') ? w.y : null,
+                w: w.w || 375,
+                h: w.h || 560,
+                dockW: w.dockW || 360
+            };
+        } catch (e) {
+            return { mode: 'float', prevMode: 'float', x: null, y: null, w: 375, h: 560, dockW: 360 };
+        }
+    }
+    function saveWin() {
+        try { localStorage.setItem(WIN_KEY, JSON.stringify(state.win)); } catch (e) {}
+    }
 
     /* ------------------------------------------------------------------ */
     /* Amorcage : attendre l'ApiClient et un utilisateur connecte.        */
@@ -46,8 +73,10 @@
             return;
         }
         state.me = window.ApiClient.getCurrentUserId();
+        state.win = loadWin();
         injectStyle();
         buildLauncher();
+        startNotifications();
     }
 
     function injectStyle() {
@@ -171,33 +200,103 @@
             document.body.appendChild(btn);
         }
         btn.addEventListener('click', togglePanel);
+        refreshBadge();
     }
 
-    function togglePanel() {
-        var panel = document.getElementById('jfc-panel');
-        if (panel) {
-            var closing = panel.classList.contains('open');
-            panel.classList.toggle('open');
-            if (closing) {
-                stopPolling();
-            } else {
-                startPolling();
-            }
-            return;
+    /* ------------------------------------------------------------------ */
+    /* Notifications (DM non lus + demandes d'ami) + presence.            */
+    /* ------------------------------------------------------------------ */
+    function refreshBadge() {
+        var el = document.getElementById('jfc-unread');
+        if (!el) { return; }
+        var n = state.notif.badge || 0;
+        if (n > 0) { el.textContent = n > 99 ? '99+' : n; el.classList.add('show'); }
+        else { el.textContent = ''; el.classList.remove('show'); }
+    }
+
+    function startNotifications() {
+        fetchNotifications();
+        if (!state.notifPolling) {
+            state.notifPolling = setInterval(fetchNotifications, 5000);
         }
-        buildPanel();
+    }
+
+    function fetchNotifications() {
+        api('ChatPlugin/notifications').then(function (n) {
+            if (!n) { return; }
+            state.notif = {
+                badge: n.badge || 0,
+                friendRequests: n.friendRequests || 0,
+                conversations: n.conversations || [],
+                online: n.online || 0,
+                members: n.members || 0
+            };
+            refreshBadge();
+            updateOnline();
+            renderConversationsBadges();
+        }).catch(function () {});
+    }
+
+    function renderConversationsBadges() {
+        var people = document.getElementById('jfc-people');
+        if (!people) { return; }
+        var dm = (state.notif.conversations || []).reduce(function (s, c) { return s + (c.unread || 0); }, 0);
+        var total = dm + (state.notif.friendRequests || 0);
+        var b = people.querySelector('.jfc-btnbadge');
+        if (total > 0) {
+            if (!b) { b = document.createElement('span'); b.className = 'jfc-btnbadge'; people.appendChild(b); }
+            b.textContent = total > 99 ? '99+' : total;
+        } else if (b) { b.remove(); }
+    }
+
+    function panel() { return document.getElementById('jfc-panel'); }
+
+    function togglePanel() {
+        var p = panel();
+        if (!p) { buildPanel(); return; }
+        if (p.classList.contains('open') && state.win.mode !== 'minimized') {
+            closePanel();
+        } else {
+            openPanel();
+        }
+    }
+
+    function openPanel() {
+        var p = panel();
+        if (!p) { buildPanel(); return; }
+        if (state.win.mode === 'minimized') {
+            state.win.mode = state.win.prevMode || 'float';
+            saveWin();
+        }
+        p.classList.add('open');
+        applyWindowState();
+        startPolling();
+    }
+
+    function closePanel() {
+        var p = panel();
+        if (!p) { return; }
+        p.classList.remove('open');
+        clearDockPush();
+        stopPolling();
     }
 
     function buildPanel() {
-        var panel = document.createElement('div');
-        panel.id = 'jfc-panel';
-        panel.innerHTML =
-            '<div class="jfc-header">' +
-                '<span class="jfc-title">Chat en Direct</span>' +
+        var p = document.createElement('div');
+        p.id = 'jfc-panel';
+        p.innerHTML =
+            '<div class="jfc-header" id="jfc-header">' +
+                '<span class="jfc-title">Chat</span>' +
                 '<span class="jfc-online"><i></i><span id="jfc-online-count"></span></span>' +
-                '<button class="jfc-icon" id="jfc-people" title="Utilisateurs">👥</button>' +
-                (state.isAdmin ? '<button class="jfc-icon" id="jfc-admin" title="Moderation">⚙️</button>' : '') +
-                '<button class="jfc-icon" id="jfc-close">✕</button>' +
+                '<div class="jfc-winctrls">' +
+                    '<button class="jfc-icon" id="jfc-people" title="Membres / conversations">👥</button>' +
+                    (state.isAdmin ? '<button class="jfc-icon" id="jfc-admin" title="Moderation">⚙️</button>' : '') +
+                    '<button class="jfc-icon" id="jfc-dockl" title="Ancrer a gauche">⇤</button>' +
+                    '<button class="jfc-icon" id="jfc-dockr" title="Ancrer a droite">⇥</button>' +
+                    '<button class="jfc-icon" id="jfc-min" title="Reduire">–</button>' +
+                    '<button class="jfc-icon" id="jfc-max" title="Agrandir / restaurer">▢</button>' +
+                    '<button class="jfc-icon" id="jfc-close" title="Fermer">✕</button>' +
+                '</div>' +
             '</div>' +
             '<div class="jfc-tabs" id="jfc-tabs"></div>' +
             '<div class="jfc-body" id="jfc-body"></div>' +
@@ -207,22 +306,36 @@
                 '<button class="jfc-icon" id="jfc-emoji" title="Emoji">😀</button>' +
                 '<button class="jfc-gif" id="jfc-gif" title="Envoyer un GIF / image">GIF</button>' +
                 '<button class="jfc-send" id="jfc-send" title="Envoyer">➤</button>' +
-            '</div>';
-        document.body.appendChild(panel);
+            '</div>' +
+            '<div class="jfc-resize" id="jfc-resize" title="Redimensionner"></div>';
+        document.body.appendChild(p);
 
-        panel.querySelector('#jfc-close').onclick = togglePanel;
-        panel.querySelector('#jfc-people').onclick = toggleSide;
-        var adminBtn = panel.querySelector('#jfc-admin');
+        p.querySelector('#jfc-close').onclick = closePanel;
+        p.querySelector('#jfc-people').onclick = toggleSide;
+        var adminBtn = p.querySelector('#jfc-admin');
         if (adminBtn) { adminBtn.onclick = openAdmin; }
-        panel.querySelector('#jfc-send').onclick = doSend;
-        panel.querySelector('#jfc-gif').onclick = toggleGifPicker;
-        panel.querySelector('#jfc-emoji').onclick = toggleEmoji;
-        var input = panel.querySelector('#jfc-input');
+        p.querySelector('#jfc-dockl').onclick = function () { toggleDock('left'); };
+        p.querySelector('#jfc-dockr').onclick = function () { toggleDock('right'); };
+        p.querySelector('#jfc-min').onclick = minimizePanel;
+        p.querySelector('#jfc-max').onclick = toggleMaximize;
+        p.querySelector('#jfc-send').onclick = doSend;
+        p.querySelector('#jfc-gif').onclick = toggleGifPicker;
+        p.querySelector('#jfc-emoji').onclick = toggleEmoji;
+        var input = p.querySelector('#jfc-input');
         input.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
         });
 
-        requestAnimationFrame(function () { panel.classList.add('open'); });
+        // Clic sur le bandeau reduit : re-ouvre.
+        p.querySelector('#jfc-header').addEventListener('dblclick', function () {
+            if (state.win.mode === 'minimized') { openPanel(); }
+        });
+
+        setupDrag(p.querySelector('#jfc-header'));
+        setupResize(p.querySelector('#jfc-resize'));
+
+        applyWindowState();
+        p.classList.add('open');
 
         // Init.
         checkAdminThenRender();
@@ -233,19 +346,165 @@
         startPolling();
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Fenetre : deplacer, redimensionner, reduire, agrandir, ancrer.     */
+    /* ------------------------------------------------------------------ */
+    function applyWindowState() {
+        var p = panel();
+        if (!p) { return; }
+        var w = state.win;
+        p.classList.remove('docked', 'docked-left', 'docked-right', 'minimized', 'maximized');
+        clearDockPush();
+
+        if (w.mode === 'minimized') {
+            p.classList.add('minimized');
+            setFloatGeom(p);
+        } else if (w.mode === 'docked-left' || w.mode === 'docked-right') {
+            var side = w.mode === 'docked-left' ? 'left' : 'right';
+            p.classList.add('docked', 'docked-' + side);
+            p.style.top = '0';
+            p.style.bottom = '0';
+            p.style.height = '';
+            p.style.width = w.dockW + 'px';
+            p.style.left = side === 'left' ? '0' : '';
+            p.style.right = side === 'right' ? '0' : '';
+            document.documentElement.style.setProperty('--jfc-dock-w', w.dockW + 'px');
+            document.documentElement.classList.add('jfc-docked-' + side);
+        } else if (w.mode === 'maximized') {
+            p.classList.add('maximized');
+            p.style.left = '2vw'; p.style.top = '2vh';
+            p.style.right = ''; p.style.bottom = '';
+            p.style.width = '96vw'; p.style.height = '96vh';
+        } else {
+            setFloatGeom(p);
+        }
+        saveWin();
+    }
+
+    function setFloatGeom(p) {
+        var w = state.win;
+        p.style.right = ''; p.style.bottom = '';
+        p.style.width = w.w + 'px';
+        p.style.height = w.h + 'px';
+        if (w.x == null || w.y == null) {
+            p.style.left = ''; p.style.right = '16px'; p.style.top = '60px';
+        } else {
+            p.style.left = clamp(w.x, 0, window.innerWidth - 80) + 'px';
+            p.style.top = clamp(w.y, 0, window.innerHeight - 40) + 'px';
+        }
+    }
+
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+    function clearDockPush() {
+        document.documentElement.classList.remove('jfc-docked-left', 'jfc-docked-right');
+    }
+
+    function toggleDock(side) {
+        var target = 'docked-' + side;
+        state.win.mode = (state.win.mode === target) ? 'float' : target;
+        state.win.prevMode = state.win.mode;
+        applyWindowState();
+    }
+
+    function toggleMaximize() {
+        state.win.mode = (state.win.mode === 'maximized') ? 'float' : 'maximized';
+        state.win.prevMode = state.win.mode;
+        applyWindowState();
+    }
+
+    function minimizePanel() {
+        if (state.win.mode !== 'minimized') {
+            state.win.prevMode = state.win.mode;
+            state.win.mode = 'minimized';
+        }
+        applyWindowState();
+    }
+
+    function setupDrag(handle) {
+        handle.addEventListener('mousedown', function (e) {
+            if (e.target.closest('.jfc-icon') || e.target.closest('button')) { return; }
+            // En mode ancre ou reduit, deplacer repasse en flottant.
+            if (state.win.mode !== 'float' && state.win.mode !== 'maximized') {
+                state.win.mode = 'float';
+            }
+            var p = panel();
+            var rect = p.getBoundingClientRect();
+            var offX = e.clientX - rect.left;
+            var offY = e.clientY - rect.top;
+            state.win.w = rect.width; state.win.h = rect.height;
+            e.preventDefault();
+
+            function move(ev) {
+                state.win.mode = 'float';
+                p.classList.remove('docked', 'docked-left', 'docked-right', 'maximized');
+                clearDockPush();
+                state.win.x = clamp(ev.clientX - offX, 0, window.innerWidth - 80);
+                state.win.y = clamp(ev.clientY - offY, 0, window.innerHeight - 40);
+                p.style.left = state.win.x + 'px';
+                p.style.top = state.win.y + 'px';
+                p.style.right = ''; p.style.bottom = '';
+                p.style.width = state.win.w + 'px';
+                p.style.height = state.win.h + 'px';
+            }
+            function up() {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+                saveWin();
+            }
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        });
+    }
+
+    function setupResize(handle) {
+        handle.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var p = panel();
+            var rect = p.getBoundingClientRect();
+            var startX = e.clientX, startY = e.clientY;
+            var startW = rect.width, startH = rect.height;
+            var docked = state.win.mode === 'docked-left' || state.win.mode === 'docked-right';
+
+            function move(ev) {
+                if (docked) {
+                    // En ancre, on ne redimensionne que la largeur.
+                    var dw = state.win.mode === 'docked-right' ? (startX - ev.clientX) : (ev.clientX - startX);
+                    state.win.dockW = clamp(startW + dw, 260, window.innerWidth - 100);
+                    p.style.width = state.win.dockW + 'px';
+                    document.documentElement.style.setProperty('--jfc-dock-w', state.win.dockW + 'px');
+                } else {
+                    state.win.w = clamp(startW + (ev.clientX - startX), 300, window.innerWidth - 20);
+                    state.win.h = clamp(startH + (ev.clientY - startY), 300, window.innerHeight - 20);
+                    p.style.width = state.win.w + 'px';
+                    p.style.height = state.win.h + 'px';
+                }
+            }
+            function up() {
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+                saveWin();
+            }
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        });
+    }
+
     function checkAdminThenRender() {
         // On teste l'acces admin en tentant l'endpoint de moderation.
         api('ChatPlugin/admin/moderation').then(function () {
             state.isAdmin = true;
             if (!document.getElementById('jfc-admin')) {
-                var header = document.querySelector('.jfc-header');
+                var ctrls = document.querySelector('.jfc-winctrls');
+                if (!ctrls) { return; }
                 var btn = document.createElement('button');
                 btn.className = 'jfc-icon';
                 btn.id = 'jfc-admin';
                 btn.title = 'Moderation';
                 btn.innerHTML = '⚙️';
                 btn.onclick = openAdmin;
-                header.insertBefore(btn, document.getElementById('jfc-close'));
+                ctrls.insertBefore(btn, document.getElementById('jfc-dockl'));
             }
         }).catch(function () { state.isAdmin = false; });
     }
@@ -315,12 +574,15 @@
     function loadHistory(room, target) {
         var q = 'ChatPlugin/messages?history=true&roomId=' + encodeURIComponent(room);
         if (target) { q += '&targetUserId=' + encodeURIComponent(target); }
-        api(q).then(function (msgs) {
+        api(q).then(function (res) {
             if (state.currentRoom !== room) { return; }
+            var msgs = (res && res.messages) || [];
+            state._lastPollTs = (res && res.serverNow) || Date.now();
             var body = document.getElementById('jfc-body');
             body.innerHTML = '';
-            (msgs || []).forEach(function (m) { appendMessage(m, room); });
+            msgs.forEach(function (m) { appendMessage(m, room); });
             scrollBottom(true);
+            if (target) { markRead(room, target); }
         }).catch(function (e) { showError(e.message); });
     }
 
@@ -328,15 +590,40 @@
         var room = state.currentRoom;
         var target = state.currentTarget;
         var after = state.lastId[room] || 0;
-        var q = 'ChatPlugin/messages?roomId=' + encodeURIComponent(room) + '&after=' + after;
+        var since = state._lastPollTs || 0;
+        var q = 'ChatPlugin/messages?roomId=' + encodeURIComponent(room) + '&after=' + after + '&delSince=' + since;
         if (target) { q += '&targetUserId=' + encodeURIComponent(target); }
-        api(q).then(function (msgs) {
+        api(q).then(function (res) {
             if (state.currentRoom !== room) { return; }
+            var msgs = (res && res.messages) || [];
+            var deleted = (res && res.deleted) || [];
+            if (res && res.serverNow) { state._lastPollTs = res.serverNow; }
             var atBottom = isAtBottom();
-            (msgs || []).forEach(function (m) { appendMessage(m, room); });
-            if ((msgs || []).length && atBottom) { scrollBottom(); }
+            msgs.forEach(function (m) { appendMessage(m, room); });
+            deleted.forEach(applyDeletion);
+            if (msgs.length && atBottom) { scrollBottom(); }
+            if (target && msgs.length) { markRead(room, target); }
         }).catch(function () { /* silencieux pendant le polling */ });
         updateOnline();
+    }
+
+    // Applique une suppression recue en direct : passe la bulle en "supprime".
+    function applyDeletion(id) {
+        var wrap = document.querySelector('#jfc-body .jfc-msg[data-id="' + id + '"]');
+        if (!wrap) { return; }
+        var bubble = wrap.querySelector('.jfc-bubble');
+        if (bubble && !bubble.classList.contains('deleted')) {
+            bubble.className = 'jfc-bubble deleted';
+            bubble.textContent = 'Message supprime';
+        }
+        var del = wrap.querySelector('.jfc-msg-del');
+        if (del) { del.remove(); }
+    }
+
+    function markRead(room, target) {
+        var q = 'ChatPlugin/read?roomId=' + encodeURIComponent(room);
+        if (target) { q += '&targetUserId=' + encodeURIComponent(target); }
+        api(q, { method: 'POST' }).then(function () { fetchNotifications(); }).catch(function () {});
     }
 
     function appendMessage(m, room) {
@@ -563,6 +850,13 @@
         head.appendChild(close);
         side.appendChild(head);
 
+        // Conversations privees (avec compteur de non-lus).
+        var convos = state.notif.conversations || [];
+        if (convos.length) {
+            side.appendChild(sectionTitle('Conversations'));
+            convos.forEach(function (c) { side.appendChild(convRow(c)); });
+        }
+
         // Demandes recues.
         if (rel.incoming && rel.incoming.length) {
             side.appendChild(sectionTitle('Demandes recues'));
@@ -646,6 +940,26 @@
         return row;
     }
 
+    function convRow(c) {
+        var row = document.createElement('div');
+        row.className = 'jfc-user jfc-conv';
+        row.appendChild(avatar(c.avatarUrl, c.name));
+        var info = document.createElement('div');
+        info.className = 'jfc-user-info';
+        info.innerHTML = '<span class="jfc-user-name">' + esc(c.name) + '</span>';
+        row.appendChild(info);
+        if (c.unread > 0) {
+            var b = document.createElement('span');
+            b.className = 'jfc-btnbadge';
+            b.textContent = c.unread > 99 ? '99+' : c.unread;
+            row.appendChild(b);
+        }
+        row.onclick = function () {
+            openDm({ Id: c.userId, Name: c.name, AvatarUrl: c.avatarUrl });
+        };
+        return row;
+    }
+
     function iconAction(icon, title, fn) {
         var b = document.createElement('button');
         b.className = 'jfc-uaction';
@@ -719,6 +1033,13 @@
                 row.appendChild(n);
                 row.appendChild(modBtn('Mute 1h', function () { sanction('mute', u.Id, 60); modal.remove(); openAdmin(); }));
                 row.appendChild(modBtn('Ban', function () { sanction('ban', u.Id, 0); modal.remove(); openAdmin(); }));
+                row.appendChild(modBtn('Purger', function () {
+                    if (confirm('Supprimer TOUS les messages de ' + u.Name + ' ?')) {
+                        api('ChatPlugin/admin/purge/' + u.Id, { method: 'POST' })
+                            .then(function () { showError('Messages de ' + u.Name + ' purges.'); })
+                            .catch(function (e) { showError(e.message); });
+                    }
+                }));
                 host.appendChild(row);
             });
         });
@@ -766,7 +1087,8 @@
     function updateOnline() {
         var el = document.getElementById('jfc-online-count');
         if (!el) { return; }
-        el.textContent = (state.users.length || '') + ' membres';
+        var n = state.notif.online || 0;
+        el.textContent = n + ' en ligne';
     }
 
     function startPolling() {

@@ -61,7 +61,8 @@ CREATE TABLE IF NOT EXISTS messages (
     content    TEXT NOT NULL,
     type       TEXT NOT NULL DEFAULT 'text',
     timestamp  INTEGER NOT NULL,
-    deleted    INTEGER NOT NULL DEFAULT 0
+    deleted    INTEGER NOT NULL DEFAULT 0,
+    deleted_at INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
 
@@ -82,8 +83,27 @@ CREATE TABLE IF NOT EXISTS moderation (
     expires_at INTEGER NOT NULL DEFAULT 0,
     reason     TEXT NOT NULL DEFAULT '',
     updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS read_state (
+    user_id      TEXT NOT NULL,
+    room_id      TEXT NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, room_id)
 );";
             cmd.ExecuteNonQuery();
+
+            // Migration pour les bases existantes : ajoute deleted_at si absent.
+            try
+            {
+                using var alter = conn.CreateCommand();
+                alter.CommandText = "ALTER TABLE messages ADD COLUMN deleted_at INTEGER NOT NULL DEFAULT 0;";
+                alter.ExecuteNonQuery();
+            }
+            catch (SqliteException)
+            {
+                // La colonne existe deja : rien a faire.
+            }
         }
     }
 
@@ -182,10 +202,29 @@ LIMIT $limit;";
         {
             using var conn = Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "UPDATE messages SET deleted = 1, content = '' WHERE id = $id;";
+            cmd.CommandText = "UPDATE messages SET deleted = 1, content = '', deleted_at = $now WHERE id = $id;";
             cmd.Parameters.AddWithValue("$id", messageId);
+            cmd.Parameters.AddWithValue("$now", Now());
             return cmd.ExecuteNonQuery() > 0;
         }
+    }
+
+    /// <summary>Ids des messages d'un salon supprimes apres un instant donne (pour le polling).</summary>
+    public List<long> GetDeletedSince(string roomId, long sinceMs)
+    {
+        var list = new List<long>();
+        using var conn = Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT id FROM messages WHERE room_id = $room AND deleted = 1 AND deleted_at > $since;";
+        cmd.Parameters.AddWithValue("$room", roomId);
+        cmd.Parameters.AddWithValue("$since", sinceMs);
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            list.Add(r.GetInt64(0));
+        }
+
+        return list;
     }
 
     public Guid? GetMessageSender(long messageId)
@@ -233,6 +272,107 @@ WHERE room_id = $room
             cmd.Parameters.AddWithValue("$max", maxMessages);
             cmd.ExecuteNonQuery();
         }
+    }
+
+    /// <summary>Supprime tous les messages d'un utilisateur (action admin).</summary>
+    public int PurgeUserMessages(Guid userId)
+    {
+        lock (_writeLock)
+        {
+            using var conn = Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM messages WHERE sender_id = $sid;";
+            cmd.Parameters.AddWithValue("$sid", userId.ToString("N"));
+            return cmd.ExecuteNonQuery();
+        }
+    }
+
+    // ---------- Lu / non-lu ----------
+
+    /// <summary>Marque un salon comme lu jusqu'au dernier message.</summary>
+    public void MarkRead(Guid userId, string roomId)
+    {
+        lock (_writeLock)
+        {
+            using var conn = Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = @"
+INSERT INTO read_state (user_id, room_id, last_read_id)
+VALUES ($u, $r, (SELECT COALESCE(MAX(id), 0) FROM messages WHERE room_id = $r))
+ON CONFLICT(user_id, room_id)
+DO UPDATE SET last_read_id = (SELECT COALESCE(MAX(id), 0) FROM messages WHERE room_id = $r);";
+            cmd.Parameters.AddWithValue("$u", userId.ToString("N"));
+            cmd.Parameters.AddWithValue("$r", roomId);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// Conversations privees d'un utilisateur, avec le nombre de messages non lus
+    /// (recus de l'autre apres le dernier "lu").
+    /// </summary>
+    public List<(string RoomId, Guid Other, int Unread, long LastId, long LastTs)> GetDmConversations(Guid userId)
+    {
+        var uid = userId.ToString("N");
+        var result = new List<(string, Guid, int, long, long)>();
+        using var conn = Open();
+
+        // Salons DM impliquant l'utilisateur, avec dernier id/timestamp.
+        var rooms = new List<(string Room, long LastId, long LastTs)>();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+SELECT room_id, MAX(id) AS last_id, MAX(timestamp) AS last_ts
+FROM messages
+WHERE room_id LIKE 'dm:%' AND room_id LIKE $needle
+GROUP BY room_id;";
+            cmd.Parameters.AddWithValue("$needle", "%" + uid + "%");
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                rooms.Add((r.GetString(0), r.GetInt64(1), r.GetInt64(2)));
+            }
+        }
+
+        foreach (var (room, lastId, lastTs) in rooms)
+        {
+            var parts = room.Split(':');
+            if (parts.Length != 3)
+            {
+                continue;
+            }
+
+            var other = parts[1] == uid ? parts[2] : parts[1];
+            if (!Guid.TryParseExact(other, "N", out var otherGuid))
+            {
+                continue;
+            }
+
+            long lastRead;
+            using (var rc = conn.CreateCommand())
+            {
+                rc.CommandText = "SELECT last_read_id FROM read_state WHERE user_id = $u AND room_id = $r;";
+                rc.Parameters.AddWithValue("$u", uid);
+                rc.Parameters.AddWithValue("$r", room);
+                var res = rc.ExecuteScalar();
+                lastRead = res is null || res is DBNull ? 0 : Convert.ToInt64(res, CultureInfo.InvariantCulture);
+            }
+
+            int unread;
+            using (var uc = conn.CreateCommand())
+            {
+                uc.CommandText = "SELECT COUNT(*) FROM messages WHERE room_id = $r AND id > $lr AND sender_id != $u AND deleted = 0;";
+                uc.Parameters.AddWithValue("$r", room);
+                uc.Parameters.AddWithValue("$lr", lastRead);
+                uc.Parameters.AddWithValue("$u", uid);
+                unread = Convert.ToInt32(uc.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
+            }
+
+            result.Add((room, otherGuid, unread, lastId, lastTs));
+        }
+
+        result.Sort((a, b) => b.Item4.CompareTo(a.Item4));
+        return result;
     }
 
     // ---------- Relations ----------
