@@ -63,6 +63,16 @@ public sealed class WebInjectionService : IHostedService
                 _logger.LogInformation("[Chat] Script du chat retire du client web.");
             }
         }
+        catch (UnauthorizedAccessException)
+        {
+            var indexPath = Path.Combine(_paths.WebPath, "index.html");
+            _logger.LogError(
+                "[Chat] Ecriture refusee sur {Path}. Le process Jellyfin n'a pas les droits d'ecriture "
+                + "sur le client web. Solution : rendre ce fichier accessible en ecriture, ex. "
+                + "'sudo chown jellyfin {Path}' puis redemarrer Jellyfin. "
+                + "Alternative robuste : installer le plugin 'File Transformation'.",
+                indexPath, indexPath);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[Chat] Echec de l'injection dans index.html.");

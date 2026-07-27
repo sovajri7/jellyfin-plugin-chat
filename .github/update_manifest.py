@@ -20,7 +20,8 @@ def main() -> None:
     args = p.parse_args()
 
     source_url = f"https://github.com/{args.repo}/releases/download/{args.tag}/{args.zip}"
-    image_url = f"https://raw.githubusercontent.com/{args.repo}/main/logo.png"
+    # Pas de logo pour l'instant : une URL invalide provoque un 404 a l'installation.
+    image_url = ""
 
     if os.path.exists(MANIFEST):
         with open(MANIFEST, encoding="utf-8") as fh:
