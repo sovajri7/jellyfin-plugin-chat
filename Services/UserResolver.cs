@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Jellyfin.Data.Entities;
-using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Entities;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.Chat.Models;
 using MediaBrowser.Controller.Library;
 
@@ -46,7 +46,7 @@ public sealed class UserResolver
         return $"Users/{user.Id:N}/Images/Primary?tag={tag}";
     }
 
-    public IEnumerable<User> AllUsers() => _userManager.Users;
+    public IEnumerable<User> AllUsers() => _userManager.GetUsers();
 
     public ChatUserDto ToDto(User user) => new()
     {
