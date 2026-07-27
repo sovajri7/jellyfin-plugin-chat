@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <title>Chat en Direct</title>
+</head>
+<body>
+<div id="ChatConfigPage" data-role="page" class="page type-interior pluginConfigurationPage"
+     data-controller="__plugin/ChatConfigPage.js">
+    <div data-role="content">
+        <div class="content-primary">
+            <form id="ChatConfigForm">
+                <h2>Chat en Direct — Configuration</h2>
+
+                <div class="checkboxContainer checkboxContainer-withDescription">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="InjectClientScript" />
+                        <span>Injecter le chat dans le client web</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Ajoute automatiquement le widget de chat au client web au demarrage du serveur.
+                        A relancer apres chaque mise a jour de Jellyfin (redemarrage suffit).
+                    </div>
+                </div>
+
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="EnablePublicRoom" />
+                        <span>Activer le salon public</span>
+                    </label>
+                </div>
+
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="EnableDirectMessages" />
+                        <span>Activer les messages prives</span>
+                    </label>
+                </div>
+
+                <div class="checkboxContainer">
+                    <label>
+                        <input is="emby-checkbox" type="checkbox" id="EnableMedia" />
+                        <span>Autoriser l'envoi de GIF / images (URL)</span>
+                    </label>
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="MaxMessageLength">Longueur max d'un message</label>
+                    <input is="emby-input" type="number" id="MaxMessageLength" min="1" max="10000" />
+                </div>
+
+                <div class="inputContainer">
+                    <label class="inputLabel inputLabelUnfocused" for="MaxMessagesPerRoom">Messages conserves par salon (0 = illimite)</label>
+                    <input is="emby-input" type="number" id="MaxMessagesPerRoom" min="0" max="1000000" />
+                </div>
+
+                <button is="emby-button" type="submit" class="raised button-submit block">
+                    <span>Enregistrer</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            var pluginId = '6b3d2c1a-9e4f-4b2a-8c7d-1f0a2b3c4d5e';
+
+            function load() {
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    document.querySelector('#InjectClientScript').checked = config.InjectClientScript;
+                    document.querySelector('#EnablePublicRoom').checked = config.EnablePublicRoom;
+                    document.querySelector('#EnableDirectMessages').checked = config.EnableDirectMessages;
+                    document.querySelector('#EnableMedia').checked = config.EnableMedia;
+                    document.querySelector('#MaxMessageLength').value = config.MaxMessageLength;
+                    document.querySelector('#MaxMessagesPerRoom').value = config.MaxMessagesPerRoom;
+                    Dashboard.hideLoadingMsg();
+                });
+            }
+
+            document.querySelector('#ChatConfigPage').addEventListener('pageshow', load);
+
+            document.querySelector('#ChatConfigForm').addEventListener('submit', function (e) {
+                e.preventDefault();
+                Dashboard.showLoadingMsg();
+                ApiClient.getPluginConfiguration(pluginId).then(function (config) {
+                    config.InjectClientScript = document.querySelector('#InjectClientScript').checked;
+                    config.EnablePublicRoom = document.querySelector('#EnablePublicRoom').checked;
+                    config.EnableDirectMessages = document.querySelector('#EnableDirectMessages').checked;
+                    config.EnableMedia = document.querySelector('#EnableMedia').checked;
+                    config.MaxMessageLength = parseInt(document.querySelector('#MaxMessageLength').value, 10) || 2000;
+                    config.MaxMessagesPerRoom = parseInt(document.querySelector('#MaxMessagesPerRoom').value, 10) || 0;
+                    ApiClient.updatePluginConfiguration(pluginId, config).then(function (result) {
+                        Dashboard.processPluginConfigurationUpdateResult(result);
+                    });
+                });
+                return false;
+            });
+        })();
+    </script>
+</div>
+</body>
+</html>

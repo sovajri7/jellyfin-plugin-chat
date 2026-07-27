@@ -1,0 +1,12 @@
+[
+  {
+    "guid": "6b3d2c1a-9e4f-4b2a-8c7d-1f0a2b3c4d5e",
+    "name": "Chat en Direct",
+    "description": "Messagerie temps reel entre utilisateurs Jellyfin : salon public, messages prives, amis, blocage et moderation.",
+    "overview": "Chat entre les utilisateurs du serveur.",
+    "owner": "you",
+    "category": "General",
+    "imageUrl": "",
+    "versions": []
+  }
+]

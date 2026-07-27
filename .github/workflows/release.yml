@@ -1,0 +1,80 @@
+name: Build & Release plugin
+
+# Declenche la publication quand tu pousses un tag de version, ex: v1.0.0.0
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Determine version
+        id: v
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          # Normalise en x.y.z.w
+          IFS='.' read -r a b c d <<< "$TAG"
+          VER="${a:-1}.${b:-0}.${c:-0}.${d:-0}"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Version = $VER"
+
+      - name: Build
+        run: |
+          dotnet build Jellyfin.Plugin.Chat.csproj -c Release \
+            -p:AssemblyVersion=${{ steps.v.outputs.version }} \
+            -p:FileVersion=${{ steps.v.outputs.version }} \
+            -o publish
+
+      - name: Package
+        id: pkg
+        run: |
+          VER="${{ steps.v.outputs.version }}"
+          ZIP="chat_${VER}.zip"
+          cd publish
+          zip -j "../${ZIP}" Jellyfin.Plugin.Chat.dll
+          cd ..
+          CHECKSUM=$(md5sum "${ZIP}" | awk '{print $1}')
+          echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
+          echo "checksum=${CHECKSUM}" >> "$GITHUB_OUTPUT"
+          echo "MD5 = ${CHECKSUM}"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pkg.outputs.zip }}
+          tag_name: ${{ github.ref_name }}
+
+      - name: Update manifest.json
+        run: |
+          python3 .github/update_manifest.py \
+            --version "${{ steps.v.outputs.version }}" \
+            --checksum "${{ steps.pkg.outputs.checksum }}" \
+            --repo "${{ github.repository }}" \
+            --tag "${{ github.ref_name }}" \
+            --zip "${{ steps.pkg.outputs.zip }}"
+
+      - name: Commit manifest
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin
+          git checkout ${{ github.event.repository.default_branch }}
+          git add manifest.json
+          git commit -m "chore: manifest ${{ steps.v.outputs.version }}" || echo "rien a committer"
+          git push origin ${{ github.event.repository.default_branch }}
