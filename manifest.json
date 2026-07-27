@@ -6,8 +6,16 @@
     "overview": "Chat entre les utilisateurs du serveur.",
     "owner": "sovajri7",
     "category": "General",
-    "imageUrl": "https://raw.githubusercontent.com/sovajri7/jellyfin-plugin-chat/main/logo.png",
+    "imageUrl": "",
     "versions": [
+      {
+        "version": "1.1.1.0",
+        "changelog": "Version 1.1.1.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/sovajri7/jellyfin-plugin-chat/releases/download/v1.1.1.0/chat_1.1.1.0.zip",
+        "checksum": "cae9a61efb67fac346012fad62d501dd",
+        "timestamp": "2026-07-27T03:23:11Z"
+      },
       {
         "version": "1.1.0.0",
         "changelog": "Version 1.1.0.0",
