@@ -9,6 +9,14 @@
     "imageUrl": "https://raw.githubusercontent.com/sovajri7/jellyfin-plugin-chat/main/logo.png",
     "versions": [
       {
+        "version": "1.2.2.0",
+        "changelog": "Version 1.2.2.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/sovajri7/jellyfin-plugin-chat/releases/download/v1.2.2.0/chat_1.2.2.0.zip",
+        "checksum": "b286cc34ba5b9b8db3256ae3a47122dd",
+        "timestamp": "2026-07-27T17:06:04Z"
+      },
+      {
         "version": "1.2.1.0",
         "changelog": "Version 1.2.1.0",
         "targetAbi": "10.11.0.0",
