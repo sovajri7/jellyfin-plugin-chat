@@ -11,8 +11,13 @@ public static class WebInjection
 {
     public const string Marker = "<!-- jellyfin-chat-plugin -->";
 
-    public const string ScriptTag =
-        Marker + "<script src=\"/ChatPlugin/client.js\" defer></script>" + Marker;
+    /// <summary>Version du plugin, utilisee pour forcer le rechargement du script apres une MAJ.</summary>
+    public static string Version =>
+        (typeof(WebInjection).Assembly.GetName().Version ?? new System.Version(0, 0)).ToString();
+
+    /// <summary>Balise script injectee, avec un cache-buster ?v=version.</summary>
+    public static string ScriptTag =>
+        Marker + "<script src=\"/ChatPlugin/client.js?v=" + Version + "\" defer></script>" + Marker;
 
     /// <summary>
     /// Recoit le contenu de index.html, y insere le script du chat avant &lt;/body&gt;,

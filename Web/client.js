@@ -79,14 +79,21 @@
         startNotifications();
     }
 
+    function scriptVersion() {
+        var s = document.querySelector('script[src*="ChatPlugin/client.js"]');
+        if (s) { var m = s.src.match(/[?&]v=([^&]+)/); if (m) { return m[1]; } }
+        return '';
+    }
+
     function injectStyle() {
         if (document.getElementById('jf-chat-style')) {
             return;
         }
+        var v = scriptVersion();
         var link = document.createElement('link');
         link.id = 'jf-chat-style';
         link.rel = 'stylesheet';
-        link.href = apiUrl('ChatPlugin/client.css');
+        link.href = apiUrl('ChatPlugin/client.css') + (v ? ('?v=' + v) : '');
         document.head.appendChild(link);
     }
 

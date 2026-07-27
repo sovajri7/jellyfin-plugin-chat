@@ -1,7 +1,7 @@
 ---
 name: "Chat en Direct"
 guid: "6b3d2c1a-9e4f-4b2a-8c7d-1f0a2b3c4d5e"
-version: "1.2.0.0"
+version: "1.2.1.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Messagerie temps reel entre utilisateurs Jellyfin."

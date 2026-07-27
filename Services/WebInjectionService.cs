@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller;
@@ -131,24 +132,35 @@ public sealed class WebInjectionService : IHostedService
             }
 
             var html = File.ReadAllText(indexPath);
-            var alreadyInjected = html.Contains(WebInjection.Marker, StringComparison.Ordinal);
 
-            if (enable && !alreadyInjected)
+            if (enable)
             {
-                var idx = html.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
+                // Deja a jour (bonne version) : rien a faire.
+                if (html.Contains(WebInjection.ScriptTag, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                // Enleve toute ancienne injection (version obsolete ou ajout manuel) puis reinjecte.
+                var cleaned = RemoveInjection(html);
+                var idx = cleaned.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
                 if (idx < 0)
                 {
                     _logger.LogWarning("[Chat] Balise </body> absente, injection impossible.");
                     return;
                 }
 
-                File.WriteAllText(indexPath, html.Insert(idx, WebInjection.ScriptTag));
-                _logger.LogInformation("[Chat] Script du chat injecte dans le client web.");
+                File.WriteAllText(indexPath, cleaned.Insert(idx, WebInjection.ScriptTag));
+                _logger.LogInformation("[Chat] Script du chat injecte/mis a jour (v{Version}).", WebInjection.Version);
             }
-            else if (!enable && alreadyInjected)
+            else
             {
-                File.WriteAllText(indexPath, RemoveInjection(html));
-                _logger.LogInformation("[Chat] Script du chat retire du client web.");
+                var cleaned = RemoveInjection(html);
+                if (!string.Equals(cleaned, html, StringComparison.Ordinal))
+                {
+                    File.WriteAllText(indexPath, cleaned);
+                    _logger.LogInformation("[Chat] Script du chat retire du client web.");
+                }
             }
         }
         catch (UnauthorizedAccessException)
@@ -179,18 +191,22 @@ public sealed class WebInjectionService : IHostedService
 
     private static string RemoveInjection(string html)
     {
-        int start;
-        while ((start = html.IndexOf(WebInjection.Marker, StringComparison.Ordinal)) >= 0)
-        {
-            var end = html.IndexOf(WebInjection.Marker, start + WebInjection.Marker.Length, StringComparison.Ordinal);
-            if (end < 0)
-            {
-                html = html.Remove(start, WebInjection.Marker.Length);
-                break;
-            }
+        // 1) Bloc complet delimite par les marqueurs.
+        html = Regex.Replace(
+            html,
+            Regex.Escape(WebInjection.Marker) + ".*?" + Regex.Escape(WebInjection.Marker),
+            string.Empty,
+            RegexOptions.Singleline);
 
-            html = html.Remove(start, end + WebInjection.Marker.Length - start);
-        }
+        // 2) Toute balise script pointant vers notre client.js (y compris injection manuelle sans marqueur, toute version).
+        html = Regex.Replace(
+            html,
+            "<script[^>]*ChatPlugin/client\\.js[^>]*>\\s*</script>",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+
+        // 3) Marqueurs orphelins eventuels.
+        html = html.Replace(WebInjection.Marker, string.Empty, StringComparison.Ordinal);
 
         return html;
     }
